@@ -399,27 +399,35 @@ const fetchIngressData = async () => {
         const url = `/api/v1/namespaces/${selectedNamespace.value}/ingresses`; // Adjust API version if needed (e.g., networking.k8s.io/v1)
         const response = await request<IngressApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
 
-        if (response.code === 200 && response.data?.items) {
-            totalIngresses.value = response.data.total ?? response.data.items.length;
-            allIngresses.value = response.data.items.map((item, index) => ({
-                uid: item.metadata.uid || `${item.metadata.namespace}-${item.metadata.name}-${index}`,
-                name: item.metadata.name,
-                namespace: item.metadata.namespace,
-                ingressClassName: item.spec?.ingressClassName || '',
-                hosts: getHosts(item.spec?.rules),
-                address: getAddress(item.status),
-                ports: '80, 443', // Fixed for typical Ingress
-                rules: simplifyRules(item.spec?.rules),
-                defaultBackend: item.spec?.defaultBackend ? formatBackend(item.spec.defaultBackend) : '',
-                createdAt: formatTimestamp(item.metadata.creationTimestamp),
-                rawData: item,
-            }));
-             const totalPages = Math.ceil(totalIngresses.value / pageSize.value);
-             if (currentPage.value > totalPages && totalPages > 0) currentPage.value = totalPages;
-             else if (totalIngresses.value === 0) currentPage.value = 1;
+        if (response.code === 200) {
+            if (response.data?.items) {
+                totalIngresses.value = response.data.total ?? response.data.items.length;
+                allIngresses.value = response.data.items.map((item, index) => ({
+                    uid: item.metadata.uid || `${item.metadata.namespace}-${item.metadata.name}-${index}`,
+                    name: item.metadata.name,
+                    namespace: item.metadata.namespace,
+                    ingressClassName: item.spec?.ingressClassName || '',
+                    hosts: getHosts(item.spec?.rules),
+                    address: getAddress(item.status),
+                    ports: '80, 443', // Fixed for typical Ingress
+                    rules: simplifyRules(item.spec?.rules),
+                    defaultBackend: item.spec?.defaultBackend ? formatBackend(item.spec.defaultBackend) : '',
+                    createdAt: formatTimestamp(item.metadata.creationTimestamp),
+                    rawData: item,
+                }));
+                const totalPages = Math.ceil(totalIngresses.value / pageSize.value);
+                if (currentPage.value > totalPages && totalPages > 0) currentPage.value = totalPages;
+                else if (totalIngresses.value === 0) currentPage.value = 1;
+            } else {
+                // Data is null/empty but HTTP status is 200
+                allIngresses.value = [];
+                totalIngresses.value = 0;
+                // ElMessage.warning('获取到空的 Ingress 数据');
+            }
         } else {
             ElMessage.error(`获取 Ingress 数据失败: ${response.message || '未知错误'}`);
-            allIngresses.value = []; totalIngresses.value = 0;
+            allIngresses.value = [];
+            totalIngresses.value = 0;
         }
     } catch (error: any) {
         console.error("获取 Ingress 数据失败:", error);
