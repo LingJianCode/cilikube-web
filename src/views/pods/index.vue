@@ -696,7 +696,10 @@
       }).catch(() => ElMessage.info('删除操作已取消'));
   };
   
-  // --- View Logs ---
+// --- View Logs ---
+  // 用于标记是否需要自动滚动
+  const shouldAutoScroll = ref(true);
+  
   const handleViewLogs = async (pod: PodDisplayItem) => {
       logDialogConfig.targetPod = pod;
       logDialogConfig.visible = true;
@@ -763,7 +766,7 @@
               // 自动滚动到最新日志
               nextTick(() => {
                   const logContainer = document.querySelector('.log-content');
-                  if (logContainer) {
+                  if (logContainer && shouldAutoScroll.value) {
                       logContainer.scrollTop = logContainer.scrollHeight;
                   }
               });
@@ -776,7 +779,17 @@
               logDialogConfig.eventSource = null;
               ElMessage.error('获取日志出错，请重试');
           };
-  
+          // 监听滚动事件
+        nextTick(() => {
+            const logContainer = document.querySelector('.log-content');
+            if (logContainer) {
+                logContainer.addEventListener('scroll', () => {
+                    const { scrollTop, scrollHeight, clientHeight } = logContainer;
+                    // 判断是否滚动到最底部
+                    shouldAutoScroll.value = scrollTop + clientHeight >= scrollHeight - 2;
+                });
+            }
+        });
       } catch (error: any) {
           console.error("获取日志失败:", error);
           const errMsg = error.response?.data || error.message || '请求失败';
