@@ -803,11 +803,12 @@
   
   // --- Exec into Container ---
   const handleExec = async (pod: PodDisplayItem) => { /* ... same logic ... */
+// debugger
       execDialogConfig.targetPod = pod; execDialogConfig.visible = true; execDialogConfig.loadingContainers = true;
       execDialogConfig.containers = []; execDialogConfig.selectedContainer = ''; execDialogConfig.connected = false; execDialogConfig.connecting = false;
       execDialogConfig.statusText = '加载容器列表...'; execDialogConfig.statusType = 'info';
       const details = await fetchPodDetails(pod.namespace, pod.name);
-      const runningContainers = details?.status?.containerStatuses?.filter(cs => cs.state?.running)?.map(cs => details.spec.containers.find(c => c.name === cs.name)).filter(Boolean) as K8sContainer[] | undefined || [];
+      const runningContainers = details && details.spec && details.spec.containers ? details.spec.containers:[];
        if (runningContainers.length > 0) { execDialogConfig.containers = runningContainers; execDialogConfig.selectedContainer = runningContainers[0].name; execDialogConfig.statusText = '请确认容器并连接。'; }
        else { execDialogConfig.statusText = '未找到该 Pod 中正在运行的容器。'; execDialogConfig.containers = []; execDialogConfig.statusType = 'warning'; }
        execDialogConfig.loadingContainers = false;
