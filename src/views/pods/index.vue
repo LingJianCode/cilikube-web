@@ -697,41 +697,63 @@
   };
   
   // --- View Logs ---
-  const handleViewLogs = async (pod: PodDisplayItem) => { /* ... same logic ... */
-       logDialogConfig.targetPod = pod; logDialogConfig.visible = true; logDialogConfig.loadingContainers = true;
-       logDialogConfig.containers = []; logDialogConfig.selectedContainer = ''; logDialogConfig.content = '正在加载容器列表...';
-       const details = await fetchPodDetails(pod.namespace, pod.name);
-       if (details?.spec) {
+  const handleViewLogs = async (pod: PodDisplayItem) => {
+      logDialogConfig.targetPod = pod;
+      logDialogConfig.visible = true;
+      logDialogConfig.loadingContainers = true;
+      logDialogConfig.containers = [];
+      logDialogConfig.selectedContainer = '';
+  
+      // 关闭之前的 SSE 连接
+      if (logDialogConfig.eventSource) {
+          logDialogConfig.eventSource.close();
+          logDialogConfig.eventSource = null;
+      }
+      // 清理日志内容
+      logDialogConfig.content = '正在加载容器列表...';
+  
+      const details = await fetchPodDetails(pod.namespace, pod.name);
+      if (details?.spec) {
           const running = details.spec.containers || [];
           const init = (details.spec.initContainers || []).map(c => ({...c, name: `[init] ${c.name}`}));
           const all = [...running, ...init]; logDialogConfig.containers = all;
           if (all.length > 0) { logDialogConfig.selectedContainer = running[0]?.name || all[0].name; await fetchLogs(); }
           else { logDialogConfig.content = '此 Pod 没有找到容器。'; }
-       } else { logDialogConfig.content = '获取 Pod 详情失败。'; }
-       logDialogConfig.loadingContainers = false;
+      } else { logDialogConfig.content = '获取 Pod 详情失败。'; }
+      logDialogConfig.loadingContainers = false;
   };
-  const fetchLogs = async () => { 
-      if (!logDialogConfig.targetPod || !logDialogConfig.selectedContainer) { logDialogConfig.content = '请选择容器。'; return; }
-      logDialogConfig.loadingLogs = true; 
+  const fetchLogs = async () => {
+      if (!logDialogConfig.targetPod || !logDialogConfig.selectedContainer) {
+          // 关闭之前的 SSE 连接
+          if (logDialogConfig.eventSource) {
+              logDialogConfig.eventSource.close();
+              logDialogConfig.eventSource = null;
+          }
+          // 清理日志内容
+          logDialogConfig.content = '请选择容器。';
+          return;
+      }
+      logDialogConfig.loadingLogs = true;
       logDialogConfig.content = '正在加载日志...';
   
       // 关闭之前的 SSE 连接
       if (logDialogConfig.eventSource) {
-        logDialogConfig.eventSource.close();
+          logDialogConfig.eventSource.close();
+          logDialogConfig.eventSource = null;
       }
+  
       try {
-        let actualContainerName = logDialogConfig.selectedContainer;
-        if (actualContainerName.startsWith('[init] ')) {
-            actualContainerName = actualContainerName.replace('[init] ', '');
-        }
-
-        const params = new URLSearchParams({
-            container: actualContainerName,
-            tailLines: logDialogConfig.tailLines?.toString() || '',
-            timestamps: 'true'
-        });
-        const url = `${VITE_API_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
-
+          let actualContainerName = logDialogConfig.selectedContainer;
+          if (actualContainerName.startsWith('[init] ')) {
+              actualContainerName = actualContainerName.replace('[init] ', '');
+          }
+          const params = new URLSearchParams({
+              container: actualContainerName,
+              tailLines: logDialogConfig.tailLines?.toString() || '',
+              timestamps: 'true'
+          });
+          const url = `${VITE_API_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
+  
           // 建立 SSE 连接
           logDialogConfig.eventSource = new EventSource(url);
   
@@ -755,13 +777,13 @@
               ElMessage.error('获取日志出错，请重试');
           };
   
-      } catch (error: any) { 
+      } catch (error: any) {
           console.error("获取日志失败:", error);
           const errMsg = error.response?.data || error.message || '请求失败';
           logDialogConfig.content = `# 获取日志出错:\n${errMsg}`;
           ElMessage.error(`获取日志出错: ${errMsg}`);
-      } finally { 
-          logDialogConfig.loadingLogs = false; 
+      } finally {
+          logDialogConfig.loadingLogs = false;
       }
   };
   const handleLogDialogClose = () => { /* ... same ... */ logDialogConfig.targetPod = null; logDialogConfig.containers = []; logDialogConfig.selectedContainer = ''; logDialogConfig.content = ''; logDialogConfig.follow = false; logDialogConfig.tailLines = 500; };
