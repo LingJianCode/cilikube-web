@@ -418,10 +418,11 @@
   `);
   
   // --- Log Dialog State ---
-  const logDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', content: '', follow: false, tailLines: 500 as number | undefined, loadingContainers: false, loadingLogs: false });
+  const logDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', content: '', follow: false, tailLines: 500 as number | undefined, loadingContainers: false, loadingLogs: false, eventSource: null as EventSource | null });
+// 添加 SSE 事件源
   
   // --- Exec Dialog State ---
-  const execDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', command: 'sh', loadingContainers: false, connecting: false, connected: false, statusText: '', statusType: 'info' as 'info' | 'success' | 'error' });
+  const execDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', command: 'sh', loadingContainers: false, connecting: false, connected: false, statusText: '', statusType: 'info' as 'info' | 'success' | 'error' |'warning'});
   const terminalContainerRef = ref<HTMLDivElement | null>(null);
   let terminal: Terminal | null = null;
   let fitAddon: FitAddon | null = null;
@@ -709,19 +710,66 @@
        } else { logDialogConfig.content = '获取 Pod 详情失败。'; }
        logDialogConfig.loadingContainers = false;
   };
-  const fetchLogs = async () => { /* ... same logic ... */
-       if (!logDialogConfig.targetPod || !logDialogConfig.selectedContainer) { logDialogConfig.content = '请选择容器。'; return; }
-       logDialogConfig.loadingLogs = true; logDialogConfig.content = '正在加载日志...';
-       try {
-           const actualContainerName = logDialogConfig.selectedContainer.replace(/^\[init\]\s/, '');
-           const response = await request<string>({ url: `/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs`, method: 'get', baseURL: VITE_API_BASE_URL, params: { container: actualContainerName, tailLines: logDialogConfig.tailLines || undefined }, responseType: 'text' });
-           logDialogConfig.content = response || '(日志内容为空)';
-       } catch (error: any) { /* ... error handling ... */
-           console.error("获取日志失败:", error);
-           const errMsg = error.response?.data || error.message || '请求失败';
-           logDialogConfig.content = `# 获取日志出错:\n${errMsg}`;
-           ElMessage.error(`获取日志出错: ${errMsg}`);
-       } finally { logDialogConfig.loadingLogs = false; }
+  const fetchLogs = async () => { 
+      if (!logDialogConfig.targetPod || !logDialogConfig.selectedContainer) { logDialogConfig.content = '请选择容器。'; return; }
+      logDialogConfig.loadingLogs = true; 
+      logDialogConfig.content = '正在加载日志...';
+  
+      // 关闭之前的 SSE 连接
+      const handleLogDialogClose = () => { 
+          // 关闭 SSE 连接
+          if (logDialogConfig.eventSource) {
+              logDialogConfig.eventSource.close();
+              logDialogConfig.eventSource = null;
+          }
+          logDialogConfig.targetPod = null; 
+          logDialogConfig.containers = []; 
+          logDialogConfig.selectedContainer = ''; 
+          logDialogConfig.content = ''; 
+          logDialogConfig.follow = false; 
+          logDialogConfig.tailLines = 500; 
+      };
+  
+      try {
+          const actualContainerName = logDialogConfig.selectedContainer.replace(/^\[init\]\s/, '');
+          const params = new URLSearchParams({
+              container: actualContainerName,
+              tailLines: logDialogConfig.tailLines?.toString() || '',
+              timestamps: 'true'
+          });
+          const url = `${VITE_API_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
+  
+          // 建立 SSE 连接
+          logDialogConfig.eventSource = new EventSource(url);
+  
+          logDialogConfig.eventSource.onmessage = (event) => {
+              // 追加日志内容
+              logDialogConfig.content += event.data + '\n';
+              // 自动滚动到最新日志
+              nextTick(() => {
+                  const logContainer = document.querySelector('.log-content');
+                  if (logContainer) {
+                      logContainer.scrollTop = logContainer.scrollHeight;
+                  }
+              });
+          };
+  
+          logDialogConfig.eventSource.onerror = (error) => {
+              console.error('SSE 连接出错:', error);
+              logDialogConfig.content += `# 获取日志出错:\n${error}\n`;
+              logDialogConfig.eventSource?.close();
+              logDialogConfig.eventSource = null;
+              ElMessage.error('获取日志出错，请重试');
+          };
+  
+      } catch (error: any) { 
+          console.error("获取日志失败:", error);
+          const errMsg = error.response?.data || error.message || '请求失败';
+          logDialogConfig.content = `# 获取日志出错:\n${errMsg}`;
+          ElMessage.error(`获取日志出错: ${errMsg}`);
+      } finally { 
+          logDialogConfig.loadingLogs = false; 
+      }
   };
   const handleLogDialogClose = () => { /* ... same ... */ logDialogConfig.targetPod = null; logDialogConfig.containers = []; logDialogConfig.selectedContainer = ''; logDialogConfig.content = ''; logDialogConfig.follow = false; logDialogConfig.tailLines = 500; };
   
@@ -796,7 +844,6 @@
   .page-title { font-size: $font-size-extra-large; font-weight: 600; color: var(--el-text-color-primary); margin: 0; }
   .info-alert { margin-bottom: $spacing-lg; background-color: var(--el-color-info-light-9); :deep(.el-alert__description) { font-size: $font-size-small; color: var(--el-text-color-regular); line-height: 1.6; } }
   .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-md; margin-bottom: $spacing-lg; padding: $spacing-md; background-color: var(--el-bg-color-overlay); border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); }
-  .filter-item {}
   .namespace-select { width: 240px; }
   .search-input { width: 300px; }
   .pod-table { border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); overflow: hidden; :deep(th.el-table__cell) { background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-weight: 600; font-size: $font-size-small; } :deep(td.el-table__cell) { padding: 8px 10px; font-size: $font-size-base; vertical-align: middle; } .pod-icon { margin-right: 8px; color: $kube-pod-icon-color; vertical-align: middle; font-size: 18px; position: relative; top: -1px; } .pod-name { font-weight: 500; vertical-align: middle; color: var(--el-text-color-regular); } .status-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: 22px; line-height: 20px; font-size: $font-size-small; cursor: default; } .status-icon { font-size: 12px; } .is-loading { animation: rotating 1.5s linear infinite; } }
