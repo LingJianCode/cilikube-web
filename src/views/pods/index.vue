@@ -716,29 +716,22 @@
       logDialogConfig.content = '正在加载日志...';
   
       // 关闭之前的 SSE 连接
-      const handleLogDialogClose = () => { 
-          // 关闭 SSE 连接
-          if (logDialogConfig.eventSource) {
-              logDialogConfig.eventSource.close();
-              logDialogConfig.eventSource = null;
-          }
-          logDialogConfig.targetPod = null; 
-          logDialogConfig.containers = []; 
-          logDialogConfig.selectedContainer = ''; 
-          logDialogConfig.content = ''; 
-          logDialogConfig.follow = false; 
-          logDialogConfig.tailLines = 500; 
-      };
-  
+      if (logDialogConfig.eventSource) {
+        logDialogConfig.eventSource.close();
+      }
       try {
-          const actualContainerName = logDialogConfig.selectedContainer.replace(/^\[init\]\s/, '');
-          const params = new URLSearchParams({
-              container: actualContainerName,
-              tailLines: logDialogConfig.tailLines?.toString() || '',
-              timestamps: 'true'
-          });
-          const url = `${VITE_API_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
-  
+        let actualContainerName = logDialogConfig.selectedContainer;
+        if (actualContainerName.startsWith('[init] ')) {
+            actualContainerName = actualContainerName.replace('[init] ', '');
+        }
+
+        const params = new URLSearchParams({
+            container: actualContainerName,
+            tailLines: logDialogConfig.tailLines?.toString() || '',
+            timestamps: 'true'
+        });
+        const url = `${VITE_API_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
+
           // 建立 SSE 连接
           logDialogConfig.eventSource = new EventSource(url);
   
