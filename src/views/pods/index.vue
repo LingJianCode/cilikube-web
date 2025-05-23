@@ -807,32 +807,106 @@
       execDialogConfig.containers = []; execDialogConfig.selectedContainer = ''; execDialogConfig.connected = false; execDialogConfig.connecting = false;
       execDialogConfig.statusText = '加载容器列表...'; execDialogConfig.statusType = 'info';
       const details = await fetchPodDetails(pod.namespace, pod.name);
-      const runningContainers = details?.status?.containerStatuses?.filter(cs => cs.state?.running)?.map(cs => details.spec.containers.find(c => c.name === cs.name)).filter(Boolean) as K8sContainer[] | undefined || [];
+      const runningContainers = details && details.spec && details.spec.containers ? details.spec.containers:[];
        if (runningContainers.length > 0) { execDialogConfig.containers = runningContainers; execDialogConfig.selectedContainer = runningContainers[0].name; execDialogConfig.statusText = '请确认容器并连接。'; }
        else { execDialogConfig.statusText = '未找到该 Pod 中正在运行的容器。'; execDialogConfig.containers = []; execDialogConfig.statusType = 'warning'; }
        execDialogConfig.loadingContainers = false;
   };
-  const initTerminal = async () => { /* ... same logic, ensure markRaw is used ... */
-       await nextTick(); if (!terminalContainerRef.value || terminal) return;
-       terminal = markRaw(new Terminal({ cursorBlink: true, rows: 25, theme: { background: '#222', foreground: '#ddd' }, convertEol: true, fontFamily: 'Consolas, "Courier New", monospace', fontSize: 13, letterSpacing: 1 }));
-       fitAddon = markRaw(new FitAddon()); terminal.loadAddon(fitAddon);
-       terminal.open(terminalContainerRef.value);
-       try { fitAddon.fit(); } catch (e) { console.error("Error fitting terminal:", e) }
-       terminal.onData((data) => { if (websocket?.readyState === WebSocket.OPEN) { websocket.send(data); } });
-       terminal.writeln('\r\n请选择容器并点击 "连接" 按钮...');
+  const initTerminal = async () => {
+      await nextTick();
+      if (!terminalContainerRef.value) {
+          console.error('终端容器元素未找到');
+          return;
+      }
+      if (terminal) {
+          terminal.dispose();
+      }
+      terminal = markRaw(new Terminal({
+          cursorBlink: true,
+          rows: 25,
+          theme: { background: '#222', foreground: '#ddd' },
+          convertEol: true,
+          fontFamily: 'Consolas, "Courier New", monospace',
+          fontSize: 13,
+          letterSpacing: 1
+      }));
+      fitAddon = markRaw(new FitAddon());
+      terminal.loadAddon(fitAddon);
+      terminal.open(terminalContainerRef.value);
+      try {
+          fitAddon.fit();
+      } catch (e) {
+          console.error("调整终端大小出错:", e);
+      }
+      terminal.onData((data) => {
+          if (websocket?.readyState === WebSocket.OPEN) {
+              websocket.send(data);
+          }
+      });
+      terminal.writeln('\r\n请选择容器并点击 "连接" 按钮...');
+      console.log('终端初始化完成');
   };
-  const connectWebSocket = () => { /* ... same logic ... */
-       if (!execDialogConfig.targetPod || !execDialogConfig.selectedContainer || execDialogConfig.connected || execDialogConfig.connecting) return;
-       execDialogConfig.connecting = true; execDialogConfig.statusText = '正在连接...'; execDialogConfig.statusType = 'info';
-       terminal?.reset(); terminal?.writeln('尝试连接 WebSocket...');
-       const { namespace, name } = execDialogConfig.targetPod; const container = execDialogConfig.selectedContainer; const command = execDialogConfig.command || 'sh';
-       const params = new URLSearchParams({ container, command, tty: 'true', stdin: 'true', stdout: 'true', stderr: 'true' });
-       const wsUrl = `${WS_BASE_URL}/api/v1/namespaces/${namespace}/pods/${name}/exec?${params.toString()}`;
-       websocket = new WebSocket(wsUrl);
-       websocket.onopen = () => { /* ... same ... */ execDialogConfig.connecting = false; execDialogConfig.connected = true; execDialogConfig.statusText = `已连接 (${container})`; execDialogConfig.statusType = 'success'; terminal?.writeln('\r\n\x1b[32m连接成功！\x1b[0m'); terminal?.focus(); if (fitAddon) fitAddon.fit(); };
-       websocket.onmessage = (event) => { /* ... same ... */ if (event.data instanceof ArrayBuffer) { terminal?.write(new Uint8Array(event.data)); } else if (typeof event.data === 'string') { terminal?.write(event.data); } };
-       websocket.onerror = (event) => { /* ... same ... */ console.error("WebSocket error:", event); execDialogConfig.connecting = false; execDialogConfig.connected = false; execDialogConfig.statusText = 'WebSocket 连接错误'; execDialogConfig.statusType = 'error'; terminal?.writeln(`\r\n\x1b[31mWebSocket 错误\x1b[0m`); };
-       websocket.onclose = (event) => { /* ... same ... */ console.log("WebSocket closed:", event.code, event.reason); execDialogConfig.connecting = false; execDialogConfig.connected = false; const reason = event.reason || `Code ${event.code}`; execDialogConfig.statusText = `连接已断开 (${reason})`; execDialogConfig.statusType = 'info'; terminal?.writeln(`\r\n\x1b[33m连接已关闭: ${reason}\x1b[0m`); websocket = null; };
+  const connectWebSocket = () => {
+      if (!execDialogConfig.targetPod || !execDialogConfig.selectedContainer || execDialogConfig.connected || execDialogConfig.connecting) return;
+      execDialogConfig.connecting = true;
+      execDialogConfig.statusText = '正在连接...';
+      execDialogConfig.statusType = 'info';
+      terminal?.reset();
+      terminal?.writeln('尝试连接 WebSocket...');
+      const { namespace, name } = execDialogConfig.targetPod;
+      const container = execDialogConfig.selectedContainer;
+      const command = execDialogConfig.command || 'sh';
+      const params = new URLSearchParams({ container, command, tty: 'true', stdin: 'true', stdout: 'true', stderr: 'true' });
+      const wsUrl = `${WS_BASE_URL}/api/v1/namespaces/${namespace}/pods/${name}/exec?${params.toString()}`;
+      websocket = new WebSocket(wsUrl);
+  
+      websocket.onopen = () => {
+          console.log('WebSocket 连接成功');
+          execDialogConfig.connecting = false;
+          execDialogConfig.connected = true;
+          execDialogConfig.statusText = `已连接 (${container})`;
+          execDialogConfig.statusType = 'success';
+          terminal?.writeln('\r\n\x1b[32m连接成功！\x1b[0m');
+          terminal?.focus();
+          if (fitAddon) fitAddon.fit();
+      };
+  
+      websocket.onmessage = async (event) => {
+          console.log('收到 WebSocket 消息:', event.data);
+          try {
+              if (event.data instanceof ArrayBuffer) {
+                  terminal?.write(new Uint8Array(event.data));
+              } else if (typeof event.data === 'string') {
+                  terminal?.write(event.data);
+              } else if (event.data instanceof Blob) {
+                  // 将 Blob 转换为 ArrayBuffer
+                  const arrayBuffer = await event.data.arrayBuffer();
+                  terminal?.write(new Uint8Array(arrayBuffer));
+              }
+          } catch (error) {
+              console.error('写入终端消息出错:', error);
+          }
+      };
+  
+      websocket.onerror = (event) => {
+          console.error("WebSocket 错误:", event);
+          execDialogConfig.connecting = false;
+          execDialogConfig.connected = false;
+          execDialogConfig.statusText = 'WebSocket 连接错误';
+          execDialogConfig.statusType = 'error';
+          terminal?.writeln(`\r\n\x1b[31mWebSocket 错误\x1b[0m`);
+      };
+  
+      websocket.onclose = (event) => {
+          console.log("WebSocket 关闭:", event.code, event.reason);
+          execDialogConfig.connecting = false;
+          execDialogConfig.connected = false;
+          const reason = event.reason || `Code ${event.code}`;
+          execDialogConfig.statusText = `连接已断开 (${reason})`;
+          execDialogConfig.statusType = 'info';
+          terminal?.writeln(`\r\n\x1b[33m连接已关闭: ${reason}\x1b[0m`);
+          websocket = null;
+      };
   };
   const disconnectWebSocket = () => { /* ... same logic ... */ if (websocket) { execDialogConfig.statusText = '正在断开连接...'; execDialogConfig.statusType = 'info'; websocket.close(1000, "User disconnected"); } };
   const handleExecDialogClose = () => { /* ... same logic ... */ disconnectWebSocket(); if (terminal) { terminal.dispose(); terminal = null; } fitAddon = null; execDialogConfig.targetPod = null; execDialogConfig.containers = []; execDialogConfig.selectedContainer = ''; execDialogConfig.connected = false; execDialogConfig.connecting = false; execDialogConfig.statusText = ''; };
