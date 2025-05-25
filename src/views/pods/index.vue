@@ -335,7 +335,7 @@
   import dayjs from "dayjs";
   import { debounce } from 'lodash-es';
   // Standard import for vue-monaco-editor
-//   import VueMonacoEditor from 'vue-monaco-editor';
+  import VueMonacoEditor from '@guolao/vue-monaco-editor';
   // Standard imports for xterm
   import { Terminal } from 'xterm';
   import { FitAddon } from 'xterm-addon-fit';
@@ -628,13 +628,15 @@
       yamlDialogConfig.content = placeholderYaml.value; yamlDialogConfig.visible = true;
   };
   
-  const handleEditPod = async (pod: PodDisplayItem) => {
+const handleEditPod = async (pod: PodDisplayItem) => {
+    //debugger
        isEditMode.value = true; editingPodName.value = pod.name;
        yamlDialogConfig.saving = true; yamlDialogConfig.content = "# 正在加载 YAML..."; yamlDialogConfig.visible = true;
        try {
            const response = await request<YamlApiResponse>({ url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}/yaml`, method: 'get', baseURL: VITE_API_BASE_URL });
            if (response.code === 200 && typeof response.data === 'string') {
                yamlDialogConfig.content = response.data;
+               await nextTick(); // 等待 DOM 更新
            } else { /* ... error handling ... */
                yamlDialogConfig.content = `# 获取 YAML 失败: ${response.message || '未知错误'}`;
                ElMessage.error(`获取 Pod YAML 失败: ${response.message || '格式错误'}`);
