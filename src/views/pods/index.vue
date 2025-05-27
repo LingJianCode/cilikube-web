@@ -393,28 +393,28 @@
   const editingPodName = ref<string | null>(null);
   const yamlDialogConfig = reactive({ visible: false, content: '', saving: false });
   const placeholderYaml = computed(() => `apiVersion: v1
-  kind: Pod
-  metadata:
-    generateName: new-pod-from-ui-
-    namespace: ${selectedNamespace.value || 'default'} # Will use selected NS
-    labels:
-      app: myapp-${Math.random().toString(36).substring(2, 6)} # Add random part to label
-      created-by: cilikube-ui
-  spec:
-    containers:
-    - name: main-container # Use a more descriptive name
-      image: nginx:alpine
-      ports:
-      - containerPort: 80
-        protocol: TCP
-      resources: # Add basic resource requests/limits as good practice
-        requests:
-          memory: "64Mi"
-          cpu: "100m"
-        limits:
-          memory: "128Mi"
-          cpu: "200m"
-    restartPolicy: Never # Default for Pod, use Deployment for Always/OnFailure
+kind: Pod
+metadata:
+  generateName: new-pod-from-ui-
+  namespace: ${selectedNamespace.value || 'default'} # Will use selected NS
+  labels:
+    app: myapp-${Math.random().toString(36).substring(2, 6)} # Add random part to label
+    created-by: cilikube-ui
+spec:
+  containers:
+  - name: main-container # Use a more descriptive name
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+      protocol: TCP
+    resources: # Add basic resource requests/limits as good practice
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  restartPolicy: Never # Default for Pod, use Deployment for Always/OnFailure
   `);
   
   // --- Log Dialog State ---
