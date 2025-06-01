@@ -139,12 +139,14 @@
   </template>
   
   <script setup lang="ts">
-  import { ref, computed, onMounted, reactive, nextTick } from "vue"
+  import { ref, computed, onMounted, reactive, nextTick, watch } from "vue"
   import { ElMessage, ElMessageBox, ElLoading } from "element-plus" // Keep ElLoading for create/delete potentially
   import type { FormInstance, FormRules } from 'element-plus'
   import { request } from "@/utils/service" // Ensure this path is correct
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'; // Import debounce
+  import { storeToRefs } from "pinia"
+  import { useClusterStore } from "@/store/modules/clusterStore"
   
   import {
     Search as SearchIcon,
@@ -275,38 +277,45 @@
       return systemNamespaces.includes(name);
   }
   const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.100:8080";
+  
+  // --- Cluster Store Integration ---
+  const clusterStore = useClusterStore()
+  const { selectedClusterName, availableClusters, loadingClusters: s_loadingClusters } = storeToRefs(clusterStore)
+  
   // --- API Interaction ---
   const fetchNamespaceData = async () => {
+    if (!selectedClusterName.value) {
+      allNamespaces.value = []
+      return
+    }
     if (loading.value) return;
     loading.value = true
     try {
+      const apiUrl = `/api/v1/clusters/${selectedClusterName.value}/namespace`
       const response = await request<NamespaceApiResponse>({
-        url: "/api/v1/namespace", // Corrected endpoint? Verify API doc
+        url: apiUrl,
         method: "get",
-        baseURL: VITE_API_BASE_URL, // Configure in request util if possible
+        baseURL: VITE_API_BASE_URL,
       })
-  
       if (response.code === 200 && response.data?.items) {
         allNamespaces.value = response.data.items.map(item => ({
           uid: item.metadata.uid,
           name: item.metadata.name,
           status: item.status.phase,
-          creationTimestamp: formatTimestamp(item.metadata.creationTimestamp), // Format here
+          creationTimestamp: formatTimestamp(item.metadata.creationTimestamp),
           labels: item.metadata.labels
         }))
-        // Reset pagination if current page is no longer valid after filtering/refresh
-         if (currentPage.value > Math.ceil(totalNamespaces.value / pageSize.value)) {
-             currentPage.value = 1;
-         }
-  
+        if (currentPage.value > Math.ceil(totalNamespaces.value / pageSize.value)) {
+          currentPage.value = 1;
+        }
       } else {
         ElMessage.error(`获取命名空间数据失败: ${response.message || '未知错误'}`)
-        allNamespaces.value = [] // Clear data on error
+        allNamespaces.value = []
       }
     } catch (error: any) {
       console.error("获取命名空间数据失败:", error)
       ElMessage.error(`获取命名空间数据出错: ${error.message || '网络请求失败'}`)
-      allNamespaces.value = [] // Clear data on error
+      allNamespaces.value = []
     } finally {
       loading.value = false
     }
@@ -318,28 +327,24 @@
       if (valid) {
         createLoading.value = true
         try {
-           // Construct the payload according to Kubernetes API spec
-           const payload = {
-               apiVersion: 'v1',
-               kind: 'Namespace',
-               metadata: {
-                   name: form.name,
-                   // Add labels/annotations here if form includes them
-                   // labels: parseLabels(form.labels), // Example helper needed
-               }
-           };
-  
+          const apiUrl = `/api/v1/clusters/${selectedClusterName.value}/namespace`
+          const payload = {
+            apiVersion: 'v1',
+            kind: 'Namespace',
+            metadata: {
+              name: form.name,
+            }
+          };
           const response = await request<{ code: number; message: string }>({
-            url: "/api/v1/namespaces", // POST to the collection endpoint
+            url: apiUrl,
             method: "post",
-            // baseURL: "VITE_API_BASE_URL",
-            data: payload // Send the structured K8s object
+            baseURL: VITE_API_BASE_URL,
+            data: payload
           })
-  
-          if (response.code === 201 || response.code === 200) { // Check for 201 Created or 200 OK
-            ElMessage.success(`命名空间 "${form.name}" 创建成功`)
+          if (response.code === 201 || response.code === 200) {
+            ElMessage.success(`命名空间 \"${form.name}\" 创建成功`)
             isDialogVisible.value = false
-            await fetchNamespaceData() // Refresh the list
+            await fetchNamespaceData()
           } else {
             ElMessage.error(`命名空间创建失败: ${response.message || '未知错误'}`)
           }
@@ -358,50 +363,56 @@
   }
   
   const handleDeleteNamespace = (namespace: NamespaceDisplayItem) => {
-      if (isSystemNamespace(namespace.name)) {
-          ElMessage.warning(`不能删除系统命名空间 "${namespace.name}"`);
-          return;
+    if (isSystemNamespace(namespace.name)) {
+      ElMessage.warning(`不能删除系统命名空间 \"${namespace.name}\"`);
+      return;
+    }
+    ElMessageBox.confirm(
+      `确定要删除命名空间 \"${namespace.name}\" 吗？此操作将删除该空间下的所有资源且不可恢复！`,
+      '危险操作确认',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'error',
+        confirmButtonClass: 'el-button--danger',
       }
-  
-      ElMessageBox.confirm(
-          `确定要删除命名空间 "${namespace.name}" 吗？此操作将删除该空间下的所有资源且不可恢复！`,
-          '危险操作确认',
-          {
-              confirmButtonText: '确认删除',
-              cancelButtonText: '取消',
-              type: 'error',
-              confirmButtonClass: 'el-button--danger',
-          }
-      ).then(async () => {
-          const loadingInstance = ElLoading.service({ // Use ElLoading for destructive actions
-              lock: true, text: `正在删除命名空间 ${namespace.name}...`, background: 'rgba(0, 0, 0, 0.7)'
-          });
-          try {
-              const response = await request<{ code: number; message: string }>({
-                  url: `/api/v1/namespaces/${namespace.name}`, // DELETE specific resource URL
-                  method: "delete",
-                  // baseURL: "VITE_API_BASE_URL",
-              });
-  
-              // Check for successful deletion status codes (200 OK or 202 Accepted)
-              if (response.code === 200 || response.code === 202) {
-                  ElMessage.success(`命名空间 "${namespace.name}" 已删除`);
-                  await fetchNamespaceData(); // Refresh list
-              } else {
-                   ElMessage.error(`删除命名空间失败: ${response.message || '未知错误'}`);
-              }
-          } catch (error: any) {
-              console.error("删除命名空间失败:", error);
-              const errMsg = error.response?.data?.message || error.message || '请求失败';
-              ElMessage.error(`删除命名空间失败: ${errMsg}`);
-          } finally {
-              loadingInstance.close();
-          }
-      }).catch(() => {
-          ElMessage.info('删除操作已取消');
+    ).then(async () => {
+      const loadingInstance = ElLoading.service({
+        lock: true, text: `正在删除命名空间 ${namespace.name}...`, background: 'rgba(0, 0, 0, 0.7)'
       });
+      try {
+        const apiUrl = `/api/v1/clusters/${selectedClusterName.value}/namespace/${namespace.name}`
+        const response = await request<{ code: number; message: string }>({
+          url: apiUrl,
+          method: "delete",
+          baseURL: VITE_API_BASE_URL,
+        });
+        if (response.code === 200 || response.code === 202) {
+          ElMessage.success(`命名空间 \"${namespace.name}\" 已删除`);
+          await fetchNamespaceData();
+        } else {
+          ElMessage.error(`删除命名空间失败: ${response.message || '未知错误'}`);
+        }
+      } catch (error: any) {
+        console.error("删除命名空间失败:", error);
+        const errMsg = error.response?.data?.message || error.message || '请求失败';
+        ElMessage.error(`删除命名空间失败: ${errMsg}`);
+      } finally {
+        loadingInstance.close();
+      }
+    }).catch(() => {
+      ElMessage.info('删除操作已取消');
+    });
   }
   
+  // --- Watch selectedClusterName for changes and fetch data ---
+  watch(selectedClusterName, (newName, oldName) => {
+    if (newName) {
+      fetchNamespaceData()
+    } else {
+      allNamespaces.value = []
+    }
+  }, { immediate: true })
   
   // --- Event Handlers ---
   const handlePageChange = (page: number) => {

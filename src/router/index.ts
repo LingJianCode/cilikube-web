@@ -114,7 +114,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         }
       },
       {
-        path: "naemspace",
+        path: "namespace",
         component: () => import("@/views/namespace/index.vue"),
         name: "Namespace",
         meta: {
