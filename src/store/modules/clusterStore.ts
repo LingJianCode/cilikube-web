@@ -40,7 +40,7 @@ export const useClusterStore = defineStore("cluster", () => {
         data: [
           { name: "default", displayName: "本地默认集群 (Default)" },
           { name: "dev-cluster", displayName: "开发集群 (Dev)" },
-          { name: "prod-cluster-us-east", displayName: "生产集群 (US-East)" },
+          { name: "prod-cluster", displayName: "生产集群 (Prod)" },
         ],
         message: "Mocked clusters fetched successfully",
       }
