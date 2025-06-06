@@ -1,70 +1,63 @@
 import { defineStore } from "pinia"
-import { ref, watch } from "vue"
-import { request } from "@/utils/service" // 假设你的 API 请求工具
+import { ref, computed } from "vue"
+// [修复] 导入我们新的、专用于 Go 后端的 API 服务
+import { getClusterList, getActiveCluster } from "@/api/cluster"
+import type { ClusterInfo as ApiClusterInfo } from "@/api/cluster"
+import { ElMessage } from "element-plus"
 
-// 定义集群信息接口
-export interface ClusterInfo {
-  name: string        // 集群的唯一标识符，用于 API 调用
-  displayName: string // 显示在 UI 上的名称
-  //可以根据需要添加其他属性，如区域、描述、是否只读等
+// 扩展接口以包含UI需要的显示名称
+export interface ClusterInfo extends ApiClusterInfo {
+  displayName: string
 }
 
-// 定义后端返回的可用集群列表的API响应结构
-interface AvailableClustersApiResponse {
-  code: number
-  data: ClusterInfo[] // 直接是 ClusterInfo 数组
-  message: string
-}
-
-const STORE_KEY_SELECTED_CLUSTER = "selectedClusterName" // localStorage 键名
+const STORE_KEY_SELECTED_CLUSTER = "selectedClusterName"
 
 export const useClusterStore = defineStore("cluster", () => {
-  // 可用集群列表
   const availableClusters = ref<ClusterInfo[]>([])
-  // 当前选中的集群名称
   const selectedClusterName = ref<string | null>(localStorage.getItem(STORE_KEY_SELECTED_CLUSTER) || null)
-  // 加载集群列表的状态
   const loadingClusters = ref<boolean>(false)
+  const activeClusterFromServer = ref<string>("")
+
+  // 计算属性：提供一个默认的显示名称
+  const currentClusterDisplayName = computed(() => {
+    if (!selectedClusterName.value) return "未选择集群"
+    const cluster = availableClusters.value.find(c => c.name === selectedClusterName.value)
+    return cluster ? cluster.displayName : selectedClusterName.value
+  })
 
   // Action: 从后端获取可用集群列表
   async function fetchAvailableClusters() {
     if (loadingClusters.value) return
     loadingClusters.value = true
     try {
-      // TODO: 替换为实际的后端 API 端点
-      // 例如: const response = await request<AvailableClustersApiResponse>({ url: "/api/v1/meta/available-clusters", method: "get" });
-      // --- START: MOCK DATA (实际开发中应替换为API调用) ---
-      await new Promise(resolve => setTimeout(resolve, 500)) // 模拟网络延迟
-      const mockResponse: AvailableClustersApiResponse = {
-        code: 200,
-        data: [
-          { name: "default", displayName: "本地默认集群 (Default)" },
-          { name: "dev-cluster", displayName: "开发集群 (Dev)" },
-          { name: "prod-cluster", displayName: "生产集群 (Prod)" },
-        ],
-        message: "Mocked clusters fetched successfully",
-      }
-      // --- END: MOCK DATA ---
+      // [修复] 调用真实的后端 API
+      const [listRes, activeRes] = await Promise.all([getClusterList(), getActiveCluster()])
 
-      // 替换为实际API调用后的处理逻辑
-      const response = mockResponse // 使用模拟数据
+      // 后端直接返回 { data: [...] }，所以我们直接用
+      const rawClusters = listRes.data
+      activeClusterFromServer.value = activeRes.data
 
-      if (response.code === 200 && response.data) {
-        availableClusters.value = response.data
-        // 如果当前没有选中的集群，或者选中的集群不在新的列表中，则自动选择第一个
-        const currentSelectionIsValid = selectedClusterName.value && availableClusters.value.some(c => c.name === selectedClusterName.value)
-        if ((!selectedClusterName.value || !currentSelectionIsValid) && availableClusters.value.length > 0) {
+      // 转换为包含 displayName 的 UI 模型
+      availableClusters.value = rawClusters.map(c => ({
+        ...c,
+        displayName: `${c.name} (${c.environment})`
+      }))
+
+      // 如果当前没有选中的集群，或者选中的集群已失效，则自动选择
+      const currentSelectionIsValid = selectedClusterName.value && availableClusters.value.some(c => c.name === selectedClusterName.value)
+      if (!currentSelectionIsValid) {
+        // 优先选择后端标记的 active 集群，其次选择列表第一个
+        if (activeClusterFromServer.value && availableClusters.value.some(c => c.name === activeClusterFromServer.value)) {
+          setSelectedClusterName(activeClusterFromServer.value)
+        } else if (availableClusters.value.length > 0) {
           setSelectedClusterName(availableClusters.value[0].name)
-        } else if (availableClusters.value.length === 0) { // 如果没有可用集群
-          setSelectedClusterName(null) // 清空选择
+        } else {
+          setSelectedClusterName(null)
         }
-      } else {
-        console.error("获取可用集群列表失败:", response.message)
-        availableClusters.value = []
-        setSelectedClusterName(null) // 获取失败也清空选择
       }
     } catch (error) {
       console.error("获取可用集群列表时发生网络错误:", error)
+      ElMessage.error("获取可用集群列表失败，请检查网络或后端服务。")
       availableClusters.value = []
       setSelectedClusterName(null)
     } finally {
@@ -80,22 +73,13 @@ export const useClusterStore = defineStore("cluster", () => {
     } else {
       localStorage.removeItem(STORE_KEY_SELECTED_CLUSTER)
     }
-    // console.log("Selected cluster changed to:", clusterName) // 用于调试
   }
-
-  // 监听 selectedClusterName 的变化并持久化 (上面已在 setSelectedClusterName 中处理)
-  // watch(selectedClusterName, (newName) => {
-  //   if (newName) {
-  //     localStorage.setItem(STORE_KEY_SELECTED_CLUSTER, newName)
-  //   } else {
-  //     localStorage.removeItem(STORE_KEY_SELECTED_CLUSTER)
-  //   }
-  // })
 
   return {
     availableClusters,
     selectedClusterName,
     loadingClusters,
+    currentClusterDisplayName,
     fetchAvailableClusters,
     setSelectedClusterName,
   }

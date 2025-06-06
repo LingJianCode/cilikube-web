@@ -523,7 +523,7 @@ spec:
   const fetchNamespaces = async () => {
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
+          const response = await request<NamespaceListResponse>({ url: "/api/v1/clusters/${selectedClusterName.value}/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
           if (response.code === 200 && Array.isArray(response.data)) {
               namespaces.value = response.data.sort();
               if (namespaces.value.length > 0 && !selectedNamespace.value) {

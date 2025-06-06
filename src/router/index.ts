@@ -106,6 +106,14 @@ export const constantRoutes: RouteRecordRaw[] = [
     },
     children: [
       {
+      path: "management", // 路径设为 management
+      component: () => import("@/views/cluster/management/index.vue"),
+      name: "ClusterManagement",
+      meta: {
+        title: "集群管理" // 菜单标题
+      }
+    },
+      {
         path: "node",
         component: () => import("@/views/node/index.vue"),
         name: "Node",
