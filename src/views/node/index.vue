@@ -62,6 +62,35 @@
                   {{ node.status?.nodeInfo?.kubeletVersion || 'N/A' }}
                 </el-descriptions-item>
                 <el-descriptions-item>
+                  <template #label>操作系统</template>
+                  {{ node.status?.nodeInfo?.osImage || 'N/A' }}
+                </el-descriptions-item>
+                <el-descriptions-item>
+                  <template #label>内核版本</template>
+                  {{ node.status?.nodeInfo?.kernelVersion || 'N/A' }}
+                </el-descriptions-item>
+                <el-descriptions-item>
+                  <template #label>容器运行时</template>
+                  {{ node.status?.nodeInfo?.containerRuntimeVersion || 'N/A' }}
+                </el-descriptions-item>
+                <el-descriptions-item>
+                  <template #label>kube-proxy 版本</template>
+                  {{ node.status?.nodeInfo?.kubeProxyVersion || 'N/A' }}
+                </el-descriptions-item>
+                <el-descriptions-item>
+                  <template #label>Pod CIDR</template>
+                  {{ node.spec?.podCIDR || 'N/A' }}
+                </el-descriptions-item>
+                <el-descriptions-item>
+                  <template #label>所有 IP</template>
+                  <span v-if="node.status?.addresses && node.status.addresses.length">
+                    <span v-for="addr in node.status.addresses" :key="addr.type" style="margin-right:8px;">
+                      <el-tag size="small">{{ addr.type }}: {{ addr.address }}</el-tag>
+                    </span>
+                  </span>
+                  <span v-else>N/A</span>
+                </el-descriptions-item>
+                <el-descriptions-item>
                   <template #label><el-icon><Cpu /></el-icon> CPU 容量</template>
                   <el-tag type="info" size="small" effect="plain">{{ node.status?.capacity?.cpu || 'N/A' }} 核</el-tag>
                 </el-descriptions-item>
@@ -102,7 +131,7 @@ import dayjs from "dayjs"
 import { useClusterStore } from "@/store/modules/clusterStore"
 // [修复] 导入新的 Node API 服务
 import { getNodeList } from "@/api/node" 
-// [修复] 假设您的 Node 类型定义在 @/api/types/node.ts
+// 导入 Node 类型定义
 import type { Node, NodeCondition, NodeAddress } from "@/api/types/node"
 import {
   Plus, Refresh, Platform, Monitor, Cpu, SetUp, Calendar, Iphone, CircleCheck, CircleClose
@@ -133,14 +162,17 @@ const fetchNodeData = async () => {
     totalNodes.value = 0
     return
   }
-  
+
   loading.value = true
   try {
-    // [修复] 调用新的、适配多集群的 API 服务
+    // 后端直接返回 Node[]
     const res = await getNodeList(clusterName)
-    // 后端直接返回 { data: { items: [...] } }
-    nodeData.value = res.data.items || []
-    totalNodes.value = nodeData.value.length
+    if (Array.isArray(res)) {
+      nodeData.value = res
+      totalNodes.value = res.length
+    } else {
+      throw new Error('节点数据格式错误')
+    }
   } catch (error: any) {
     console.error(`获取集群 '${clusterName}' 的节点数据时发生错误:`, error)
     ElMessage.error(`获取节点数据失败: ${error.message || '未知错误'}`)
