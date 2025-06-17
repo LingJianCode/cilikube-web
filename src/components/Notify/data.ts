@@ -30,19 +30,19 @@ export const notifyData: ListItem[] = [
 
 export const messageData: ListItem[] = [
   {
-    avatar: "https://gw.alipayobjects.com/zos/rmsportal/ThXAXghbEsBCCSDihZxY.png",
+    avatar: "",
     title: "打工人早安",
     description: "今天搬砖不狠，明天地位不稳，早安，打工人",
     datetime: "2025-1-1"
   },
   {
-    avatar: "https://gw.alipayobjects.com/zos/rmsportal/ThXAXghbEsBCCSDihZxY.png",
+    avatar: "",
     title: "打工人午安",
     description: "今天搬砖不狠，明天地位不稳，午安，打工人",
     datetime: "2025-6-1"
   },
   {
-    avatar: "https://gw.alipayobjects.com/zos/rmsportal/ThXAXghbEsBCCSDihZxY.png",
+    avatar: "",
     title: "打工人晚安",
     description: "今天搬砖不狠，明天地位不稳，晚安，打工人",
     datetime: "2025-12-1"
