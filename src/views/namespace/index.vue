@@ -291,7 +291,7 @@
     if (loading.value) return;
     loading.value = true
     try {
-      const apiUrl = `/api/v1/clusters/${selectedClusterName.value}/namespace`
+      const apiUrl = `/api/v1/namespaces`
       const response = await request<NamespaceApiResponse>({
         url: apiUrl,
         method: "get",
@@ -327,7 +327,7 @@
       if (valid) {
         createLoading.value = true
         try {
-          const apiUrl = `/api/v1/clusters/${selectedClusterName.value}/namespace`
+          const apiUrl = `/api/v1/namespaces`
           const payload = {
             apiVersion: 'v1',
             kind: 'Namespace',
@@ -381,7 +381,7 @@
         lock: true, text: `正在删除命名空间 ${namespace.name}...`, background: 'rgba(0, 0, 0, 0.7)'
       });
       try {
-        const apiUrl = `/api/v1/clusters/${selectedClusterName.value}/namespace/${namespace.name}`
+        const apiUrl = `/api/v1/namespaces/${namespace.name}`
         const response = await request<{ code: number; message: string }>({
           url: apiUrl,
           method: "delete",

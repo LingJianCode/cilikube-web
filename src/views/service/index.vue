@@ -215,7 +215,7 @@ interface ServiceApiItem {
 }
 interface ServiceListApiResponseData { items: ServiceApiItem[]; total?: number; metadata?: { resourceVersion?: string } }
 interface ServiceApiResponse { code: number; data: ServiceListApiResponseData; message: string }
-interface NamespaceListResponse { code: number; data: string[]; message: string }
+interface NamespaceListResponse { code: number; data: { items: Array<{ metadata: { name: string } }> }; message: string }
 
 // Internal Display/Table Item
 interface ServiceDisplayItem {
@@ -360,8 +360,8 @@ const fetchNamespaces = async () => { /* ... same as before ... */
     loading.namespaces = true;
     try {
         const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-        if (response.code === 200 && Array.isArray(response.data)) {
-            namespaces.value = response.data;
+        if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
+            namespaces.value = response.data.items.map(ns => ns.metadata.name);
             if (namespaces.value.length > 0 && !selectedNamespace.value) {
                  selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
             } else if (namespaces.value.length === 0) { ElMessage.warning("未找到任何命名空间。"); }

@@ -165,16 +165,16 @@ const fetchNodeData = async () => {
 
   loading.value = true
   try {
-    // 后端直接返回 Node[]
-    const res = await getNodeList(clusterName)
-    if (Array.isArray(res)) {
-      nodeData.value = res
-      totalNodes.value = res.length
+    // 后端返回格式: {code: 200, data: {items: Node[]}}
+    const res = await getNodeList()
+    if (res && res.data && Array.isArray(res.data.items)) {
+      nodeData.value = res.data.items
+      totalNodes.value = res.data.items.length
     } else {
       throw new Error('节点数据格式错误')
     }
   } catch (error: any) {
-    console.error(`获取集群 '${clusterName}' 的节点数据时发生错误:`, error)
+    console.error(`获取节点数据时发生错误:`, error)
     ElMessage.error(`获取节点数据失败: ${error.message || '未知错误'}`)
     nodeData.value = []
     totalNodes.value = 0

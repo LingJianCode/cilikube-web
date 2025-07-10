@@ -24,7 +24,7 @@ const codeUrl = ref("")
 const loginFormData: LoginRequestData = reactive({
   username: "admin",
   password: "12345678",
-  code: ""
+  code: "0000" // 固定验证码，跳过验证
 })
 /** 登录表单校验规则 */
 const loginFormRules: FormRules = {
@@ -32,8 +32,8 @@ const loginFormRules: FormRules = {
   password: [
     { required: true, message: "请输入密码", trigger: "blur" },
     { min: 8, max: 16, message: "长度在 8 到 16 个字符", trigger: "blur" }
-  ],
-  code: [{ required: true, message: "请输入验证码", trigger: "blur" }]
+  ]
+  // 移除验证码校验
 }
 /** 登录逻辑 */
 const handleLogin = () => {
@@ -43,10 +43,10 @@ const handleLogin = () => {
       useUserStore()
         .login(loginFormData)
         .then(() => {
-          router.push({ path: "/" })
+          router.push({ path: "/board/dashboard" })
         })
         .catch(() => {
-          createCode()
+          // 移除验证码重新生成逻辑
           loginFormData.password = ""
         })
         .finally(() => {
@@ -57,15 +57,10 @@ const handleLogin = () => {
     }
   })
 }
-/** 创建验证码 */
+/** 创建验证码 - 简化为空函数 */
 const createCode = () => {
-  // 先清空验证码的输入
-  loginFormData.code = ""
-  // 获取验证码
-  codeUrl.value = ""
-  getLoginCodeApi().then((res) => {
-    codeUrl.value = res.data
-  })
+  // 移除验证码生成逻辑
+  codeUrl.value = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjQwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE2Ij4wMDAwPC90ZXh0Pjwvc3ZnPg=="
 }
 
 /** 初始化验证码 */

@@ -395,7 +395,7 @@ interface PVListApiResponseData {
   loading.pvs = true;
   try {
     const params: Record<string, any> = {};
-    const url = `/api/v1/pvs`;
+    const url = `/api/v1/persistentvolumes`;
     const response = await request<PVApiResponse>({ 
       url, 
       method: "get", 

@@ -418,8 +418,7 @@ spec:
   `);
   
   // --- Log Dialog State ---
-  const logDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', content: '', follow: false, tailLines: 500 as number | undefined, loadingContainers: false, loadingLogs: false, eventSource: null as EventSource | null });
-// 添加 SSE 事件源
+  const logDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', content: '', follow: false, tailLines: 500 as number | undefined, loadingContainers: false, loadingLogs: false, websocket: null as WebSocket | null, connected: false });
   
   // --- Exec Dialog State ---
   const execDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', command: 'sh', loadingContainers: false, connecting: false, connected: false, statusText: '', statusType: 'info' as 'info' | 'success' | 'error' |'warning'});
@@ -495,8 +494,8 @@ spec:
       return d.isValid() ? d.format("YYYY-MM-DD HH:mm:ss") : 'Invalid Date';
   }
   // Status helpers remain the same
-  const getStatusTagType = (status: string): 'success' | 'warning' | 'danger' | 'info' => { /* ... same ... */
-      if (!status) return 'info';
+  const getStatusTagType = (status: string | any): 'success' | 'warning' | 'danger' | 'info' => {
+      if (!status || typeof status !== 'string') return 'info';
       const lowerStatus = status.toLowerCase();
       if (lowerStatus === 'running' || lowerStatus === 'succeeded') return 'success';
       if (lowerStatus.includes('pending') || lowerStatus.includes('creating') || lowerStatus.includes('initializing')) return 'warning';
@@ -504,8 +503,8 @@ spec:
       if (lowerStatus.includes('terminating')) return 'info';
       return 'info';
   }
-  const getStatusIcon = (status: string) => { /* ... same ... */
-      if (!status) return QuestionFilled;
+  const getStatusIcon = (status: string | any) => {
+      if (!status || typeof status !== 'string') return QuestionFilled;
       const lowerStatus = status.toLowerCase();
        if (lowerStatus === 'running' || lowerStatus === 'succeeded') return CircleCheckFilled;
        if (lowerStatus.includes('pending') || lowerStatus.includes('creating') || lowerStatus.includes('terminating') || lowerStatus.includes('initializing')) return LoadingIcon;
@@ -523,9 +522,10 @@ spec:
   const fetchNamespaces = async () => {
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/clusters/${selectedClusterName.value}/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-          if (response.code === 200 && Array.isArray(response.data)) {
-              namespaces.value = response.data.sort();
+          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
+          if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
+              // 提取命名空间名称
+              namespaces.value = response.data.items.map(ns => ns.metadata.name).sort();
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
                    selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
               } else if (namespaces.value.length === 0) {
@@ -561,10 +561,19 @@ spec:
           const response = await request<PodApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
   
           if (response.code === 200 && response.data?.items) {
-              // FIXED: Store raw ISO date string for sorting
-              allPods.value = response.data.items.map(item => ({
-                  ...item,
-                  // Keep createdAt as the original ISO string from backend
+              // 正确映射Kubernetes Pod对象到显示格式
+              allPods.value = response.data.items.map(pod => ({
+                  uid: pod.metadata.uid,
+                  name: pod.metadata.name,
+                  namespace: pod.metadata.namespace,
+                  labels: pod.metadata.labels,
+                  annotations: pod.metadata.annotations,
+                  status: pod.status?.phase || 'Unknown', // 提取状态字符串
+                  reason: pod.status?.reason,
+                  message: pod.status?.message,
+                  ip: pod.status?.podIP,
+                  node: pod.spec?.nodeName,
+                  createdAt: pod.metadata.creationTimestamp
               }));
   
               // Adjust page number *after* data is loaded and filtering/sorting is applied
@@ -709,11 +718,12 @@ const handleEditPod = async (pod: PodDisplayItem) => {
       logDialogConfig.containers = [];
       logDialogConfig.selectedContainer = '';
   
-      // 关闭之前的 SSE 连接
-      if (logDialogConfig.eventSource) {
-          logDialogConfig.eventSource.close();
-          logDialogConfig.eventSource = null;
+      // 关闭之前的 WebSocket 连接
+      if (logDialogConfig.websocket) {
+          logDialogConfig.websocket.close();
+          logDialogConfig.websocket = null;
       }
+      logDialogConfig.connected = false;
       // 清理日志内容
       logDialogConfig.content = '正在加载容器列表...';
   
@@ -729,11 +739,12 @@ const handleEditPod = async (pod: PodDisplayItem) => {
   };
   const fetchLogs = async () => {
       if (!logDialogConfig.targetPod || !logDialogConfig.selectedContainer) {
-          // 关闭之前的 SSE 连接
-          if (logDialogConfig.eventSource) {
-              logDialogConfig.eventSource.close();
-              logDialogConfig.eventSource = null;
+          // 关闭之前的 WebSocket 连接
+          if (logDialogConfig.websocket) {
+              logDialogConfig.websocket.close();
+              logDialogConfig.websocket = null;
           }
+          logDialogConfig.connected = false;
           // 清理日志内容
           logDialogConfig.content = '请选择容器。';
           return;
@@ -741,11 +752,12 @@ const handleEditPod = async (pod: PodDisplayItem) => {
       logDialogConfig.loadingLogs = true;
       logDialogConfig.content = '正在加载日志...';
   
-      // 关闭之前的 SSE 连接
-      if (logDialogConfig.eventSource) {
-          logDialogConfig.eventSource.close();
-          logDialogConfig.eventSource = null;
+      // 关闭之前的 WebSocket 连接
+      if (logDialogConfig.websocket) {
+          logDialogConfig.websocket.close();
+          logDialogConfig.websocket = null;
       }
+      logDialogConfig.connected = false;
   
       try {
           let actualContainerName = logDialogConfig.selectedContainer;
@@ -757,14 +769,22 @@ const handleEditPod = async (pod: PodDisplayItem) => {
               tailLines: logDialogConfig.tailLines?.toString() || '',
               timestamps: 'true'
           });
-          const url = `${VITE_API_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
+          const wsUrl = `${WS_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
   
-          // 建立 SSE 连接
-          logDialogConfig.eventSource = new EventSource(url);
+          // 建立 WebSocket 连接
+          logDialogConfig.websocket = new WebSocket(wsUrl);
   
-          logDialogConfig.eventSource.onmessage = (event) => {
+          logDialogConfig.websocket.onopen = () => {
+              console.log('Log WebSocket 连接成功');
+              logDialogConfig.connected = true;
+              logDialogConfig.content = ''; // 清空之前的内容
+          };
+
+          logDialogConfig.websocket.onmessage = (event) => {
               // 追加日志内容
-              logDialogConfig.content += event.data + '\n';
+              if (typeof event.data === 'string') {
+                  logDialogConfig.content += event.data + '\n';
+              }
               // 自动滚动到最新日志
               nextTick(() => {
                   const logContainer = document.querySelector('.log-content');
@@ -774,12 +794,19 @@ const handleEditPod = async (pod: PodDisplayItem) => {
               });
           };
   
-          logDialogConfig.eventSource.onerror = (error) => {
-              console.error('SSE 连接出错:', error);
-              logDialogConfig.content += `# 获取日志出错:\n${error}\n`;
-              logDialogConfig.eventSource?.close();
-              logDialogConfig.eventSource = null;
+          logDialogConfig.websocket.onerror = (error) => {
+              console.error('Log WebSocket 连接出错:', error);
+              logDialogConfig.content += `# 获取日志出错\n`;
+              logDialogConfig.connected = false;
               ElMessage.error('获取日志出错，请重试');
+          };
+
+          logDialogConfig.websocket.onclose = (event) => {
+              console.log('Log WebSocket 关闭:', event.code, event.reason);
+              logDialogConfig.connected = false;
+              if (event.code !== 1000) { // 非正常关闭
+                  logDialogConfig.content += `# WebSocket 连接已断开: ${event.reason || event.code}\n`;
+              }
           };
           // 监听滚动事件
         nextTick(() => {
@@ -801,7 +828,20 @@ const handleEditPod = async (pod: PodDisplayItem) => {
           logDialogConfig.loadingLogs = false;
       }
   };
-  const handleLogDialogClose = () => { /* ... same ... */ logDialogConfig.targetPod = null; logDialogConfig.containers = []; logDialogConfig.selectedContainer = ''; logDialogConfig.content = ''; logDialogConfig.follow = false; logDialogConfig.tailLines = 500; };
+  const handleLogDialogClose = () => {
+      // 关闭 WebSocket 连接
+      if (logDialogConfig.websocket) {
+          logDialogConfig.websocket.close(1000, 'User closed dialog');
+          logDialogConfig.websocket = null;
+      }
+      logDialogConfig.targetPod = null;
+      logDialogConfig.containers = [];
+      logDialogConfig.selectedContainer = '';
+      logDialogConfig.content = '';
+      logDialogConfig.follow = false;
+      logDialogConfig.tailLines = 500;
+      logDialogConfig.connected = false;
+  };
   
   // --- Exec into Container ---
   const handleExec = async (pod: PodDisplayItem) => { /* ... same logic ... */

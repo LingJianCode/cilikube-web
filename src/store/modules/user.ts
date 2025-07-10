@@ -22,6 +22,8 @@ export const useUserStore = defineStore("user", () => {
     const { data } = await loginApi({ username, password, code })
     setToken(data.token)
     token.value = data.token
+    // 获取用户信息和角色
+    await getInfo()
   }
   /** 获取用户详情 */
   const getInfo = async () => {

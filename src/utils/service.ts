@@ -36,6 +36,7 @@ function createMockService() {
       }
       switch (code) {
         case 0:
+        case 200:
           return apiData
         case 401:
           return logout()

@@ -224,7 +224,7 @@
   
   interface PVCListApiResponseData { items: PVCApiItem[]; total: number } // Assuming total is always present now
   interface PVCApiResponse { code: number; data: PVCListApiResponseData; message: string }
-  interface NamespaceListResponse { code: number; data: string[]; message: string }
+  interface NamespaceListResponse { code: number; data: { items: string[] }; message: string }
   
   // Internal Display/Table Item - adjusted to use direct fields from PVCApiItem
   interface PVCDisplayItem {
@@ -343,8 +343,8 @@
       loading.namespaces = true;
       try {
           const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-          if (response.code === 200 && Array.isArray(response.data)) {
-              namespaces.value = response.data;
+          if (response.code === 200 && response.data?.items && Array.isArray(response.data.items)) {
+              namespaces.value = response.data.items;
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
                    selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
               } else if (namespaces.value.length === 0) { ElMessage.warning("未找到任何命名空间。"); }
@@ -361,7 +361,7 @@
       try {
           const params: Record<string, any> = { /* Server-side params if needed */ };
           // ** Use correct endpoint name from backend routing **
-          const url = `/api/v1/namespaces/${selectedNamespace.value}/pvcs`; // Make sure this matches Go route
+          const url = `/api/v1/namespaces/${selectedNamespace.value}/persistentvolumeclaims`; // Make sure this matches Go route
           const response = await request<PVCApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
   
           if (response.code === 200 && response.data?.items && Array.isArray(response.data.items)) {
