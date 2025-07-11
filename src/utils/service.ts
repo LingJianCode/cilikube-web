@@ -3,11 +3,45 @@ import { useUserStoreHook } from "@/store/modules/user"
 import { ElMessage } from "element-plus"
 import { get, merge } from "lodash-es"
 import { getToken } from "./cache/cookies"
+import { getCurrentClusterId as getGlobalClusterId } from "./cluster-context"
 
 /** 退出登录并强制刷新页面（会重定向到登录页） */
 function logout() {
   useUserStoreHook().logout()
   location.reload()
+}
+
+/** 获取当前选择的集群ID */
+function getCurrentClusterId(): string | null {
+  // 优先从全局上下文获取
+  const globalId = getGlobalClusterId()
+  if (globalId) return globalId
+  
+  // 如果全局上下文为空，可能是应用刚启动，尝试从localStorage获取作为fallback
+  // 但这只能获取到名称，无法获取ID，所以这里暂时返回null
+  // 实际使用中，应该确保在应用启动时就初始化集群store
+  return null
+}
+
+/** 判断是否为需要集群上下文的资源API */
+function isResourceApiUrl(url: string): boolean {
+  // 匹配需要集群上下文的资源API路径
+  const resourceApiPatterns = [
+    /\/api\/v1\/nodes/,
+    /\/api\/v1\/pods/,
+    /\/api\/v1\/deployments/,
+    /\/api\/v1\/services/,
+    /\/api\/v1\/namespaces/,
+    /\/api\/v1\/persistentvolumes/,
+    /\/api\/v1\/persistentvolumeclaims/,
+    /\/api\/v1\/configmaps/,
+    /\/api\/v1\/secrets/,
+    /\/api\/v1\/ingresses/,
+    /\/api\/v1\/daemonsets/,
+    /\/api\/v1\/statefulsets/
+  ]
+  
+  return resourceApiPatterns.some(pattern => pattern.test(url))
 }
 
 // ==================================================================================
@@ -19,7 +53,21 @@ function createMockService() {
   const service = axios.create()
   // 请求拦截
   service.interceptors.request.use(
-    (config) => config,
+    (config) => {
+      // 为资源API请求自动添加clusterId参数
+      if (config.url && isResourceApiUrl(config.url)) {
+        const clusterId = getCurrentClusterId()
+        if (clusterId) {
+          // 如果URL已有查询参数，添加到现有参数中
+          if (config.params) {
+            config.params.clusterId = clusterId
+          } else {
+            config.params = { clusterId }
+          }
+        }
+      }
+      return config
+    },
     (error) => Promise.reject(error)
   )
   // 响应拦截（处理带 code 的返回数据）
@@ -101,7 +149,7 @@ function createMockRequest(service: AxiosInstance) {
         "Content-Type": "application/json"
       },
       timeout: 5000,
-      baseURL: import.meta.env.VITE_BASE_API, // 使用 VITE_BASE_API
+      baseURL: import.meta.env.VITE_BASE_API, // 统一使用 VITE_BASE_API
       data: {}
     }
     const mergeConfig = merge(defaultConfig, config)
@@ -182,7 +230,7 @@ function createGoApiRequest(service: AxiosInstance) {
         "Content-Type": "application/json"
       },
       timeout: 10000, // 为真实后端设置更长的超时时间
-      baseURL: import.meta.env.VITE_GO_API_BASE_URL, // 使用新的环境变量
+      baseURL: import.meta.env.VITE_BASE_API, // 统一使用 VITE_BASE_API
       data: {}
     }
     const mergeConfig = merge(defaultConfig, config)

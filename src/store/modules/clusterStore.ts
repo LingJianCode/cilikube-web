@@ -1,9 +1,10 @@
 import { defineStore } from "pinia"
-import { ref, computed } from "vue"
+import { ref, computed, watch } from "vue"
 // [修复] 导入我们新的、专用于 Go 后端的 API 服务
-import { getClusterList, getActiveCluster } from "@/api/cluster"
+import { getClusterList, getActiveCluster, setActiveCluster } from "@/api/cluster"
 import type { ClusterInfo as ApiClusterInfo } from "@/api/cluster"
 import { ElMessage } from "element-plus"
+import { setCurrentClusterId } from "@/utils/cluster-context"
 
 // 扩展接口以包含UI需要的显示名称
 export interface ClusterInfo extends ApiClusterInfo {
@@ -17,6 +18,13 @@ export const useClusterStore = defineStore("cluster", () => {
   const selectedClusterName = ref<string | null>(localStorage.getItem(STORE_KEY_SELECTED_CLUSTER) || null)
   const loadingClusters = ref<boolean>(false)
   const activeClusterFromServer = ref<string>("")
+
+  // 计算属性：获取当前选择集群的ID
+  const selectedClusterID = computed(() => {
+    if (!selectedClusterName.value) return null
+    const cluster = availableClusters.value.find(c => c.name === selectedClusterName.value)
+    return cluster ? cluster.id : null
+  })
 
   // 计算属性：提供一个默认的显示名称
   const currentClusterDisplayName = computed(() => {
@@ -66,18 +74,33 @@ export const useClusterStore = defineStore("cluster", () => {
   }
 
   // Action: 设置当前选中的集群
-  function setSelectedClusterName(clusterName: string | null) {
+  async function setSelectedClusterName(clusterName: string | null) {
     selectedClusterName.value = clusterName
     if (clusterName) {
       localStorage.setItem(STORE_KEY_SELECTED_CLUSTER, clusterName)
+      
+      // 同时调用后端API设置活动集群
+      try {
+        await setActiveCluster(clusterName)
+        console.log(`已将后端活动集群设置为: ${clusterName}`)
+      } catch (error) {
+        console.warn(`设置后端活动集群失败:`, error)
+        // 不阻止前端状态更新，只是警告
+      }
     } else {
       localStorage.removeItem(STORE_KEY_SELECTED_CLUSTER)
     }
   }
 
+  // 监听集群选择变化，同步到全局上下文
+  watch(selectedClusterID, (newClusterID) => {
+    setCurrentClusterId(newClusterID)
+  }, { immediate: true })
+
   return {
     availableClusters,
     selectedClusterName,
+    selectedClusterID,
     loadingClusters,
     currentClusterDisplayName,
     fetchAvailableClusters,

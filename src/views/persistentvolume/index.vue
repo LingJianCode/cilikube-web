@@ -121,7 +121,7 @@
               </template>
           </el-table-column>
            <template #empty>
-            <el-empty description="未找到 PersistentVolumes" image-size="100" />
+            <el-empty description="未找到 PersistentVolumes" :image-size="100" />
            </template>
       </el-table>
   
@@ -179,37 +179,49 @@
   } from '@element-plus/icons-vue'
   
   // --- Interfaces ---
-  // Matching backend PVResponse
-  interface PVResponse {
-    metadata: {
-        name: string;
-        uid: string;
-        resourceVersion: string;
-        creationTimestamp: string;
-        annotations?: { [key: string]: string };
-        finalizers?: string[];
-        managedFields?: any[];
-    };
-    spec: {
-        capacity: { storage: string };
-        accessModes: string[];
-        persistentVolumeReclaimPolicy: string;
-        storageClassName: string;
-        volumeMode: string;
-        hostPath?: { path: string; type: string };
-    };
-    status: {
-        phase: string;
-        lastPhaseTransitionTime?: string;
-        claim?: string; // 如果有绑定 PVC，这里可能会有值
-    };
-}
-interface PVListApiResponseData {
-    metadata: { resourceVersion: string };
-    items: PVResponse[];
-}
-  interface PVListApiResponseData { items: PVResponse[]; total: number }
-  interface PVApiResponse { code: number; data: PVListApiResponseData; message: string }
+  // Matching backend K8s native PersistentVolumeList response
+  interface K8sPVListResponse {
+      metadata: { resourceVersion: string };
+      items: K8sPersistentVolume[];
+  }
+
+  interface K8sPersistentVolume {
+      metadata: {
+          name: string;
+          uid: string;
+          resourceVersion: string;
+          creationTimestamp: string;
+          annotations?: { [key: string]: string };
+          finalizers?: string[];
+          managedFields?: any[];
+      };
+      spec: {
+          capacity: { storage: string };
+          accessModes: string[];
+          persistentVolumeReclaimPolicy: string;
+          storageClassName: string;
+          volumeMode: string;
+          hostPath?: { path: string; type: string };
+          claimRef?: {
+              kind: string;
+              namespace: string;
+              name: string;
+              uid: string;
+              apiVersion: string;
+              resourceVersion: string;
+          };
+      };
+      status: {
+          phase: string;
+          lastPhaseTransitionTime?: string;
+      };
+  }
+
+  interface PVApiResponse { 
+      code: number; 
+      data: K8sPVListResponse; 
+      message: string;
+  }
   
   // Internal Display/Table Item
   interface PVDisplayItem {
@@ -328,33 +340,45 @@ interface PVListApiResponseData {
       if (!timestamp) return 'N/A'; return dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss");
   }
   
-  // Format capacity string (e.g., "5Gi", "100Mi") to human-readable bytes
-  // Requires js-quantities library: npm install js-quantities
+  // Format capacity string (e.g., "5Gi", "100Mi") to human-readable format
   const formatCapacity = (capacity: string): string => {
       if (!capacity) return 'N/A';
       try {
-          // K8s uses binary prefixes (Ki, Mi, Gi), js-quantities uses SI by default but parses binary
-          // Need to explicitly specify the base unit if needed or rely on its parsing
-          // Let's try parsing directly and formatting
-          const qty = Qty(capacity); // e.g., Qty("5Gi")
-          return qty.format('gib') // Or 'gB' for base-10, 'mib', 'kib' etc.
-                     .replace('GiB', ' GiB')
-                     .replace('MiB', ' MiB')
-                     .replace('KiB', ' KiB'); // Add space
+          // 简单的格式化，保持原有格式但加空格
+          return capacity.replace(/([0-9])([A-Za-z])/g, '$1 $2');
       } catch (e) {
           console.warn(`Could not parse capacity string "${capacity}":`, e);
           return capacity; // Return original string if parsing fails
       }
   }
-  // Parse capacity string to bytes for sorting
+  
+  // Parse capacity string to bytes for sorting - simplified version
   const parseCapacityToBytes = (capacity: string): number => {
       if (!capacity) return 0;
-       try {
-           const qty = Qty(capacity);
-           return qty.toBase().scalar; // Convert to base units (bytes)
-       } catch (e) {
-           return 0; // Return 0 if parsing fails
-       }
+      try {
+          // 简单的解析，支持常见的单位
+          const match = capacity.match(/^(\d+(?:\.\d+)?)([A-Za-z]*)$/);
+          if (!match) return 0;
+          
+          const value = parseFloat(match[1]);
+          const unit = match[2].toLowerCase();
+          
+          const multipliers: Record<string, number> = {
+              'ki': 1024,
+              'mi': 1024 * 1024,
+              'gi': 1024 * 1024 * 1024,
+              'ti': 1024 * 1024 * 1024 * 1024,
+              'k': 1000,
+              'm': 1000 * 1000,
+              'g': 1000 * 1000 * 1000,
+              't': 1000 * 1000 * 1000 * 1000,
+              '': 1
+          };
+          
+          return value * (multipliers[unit] || 1);
+      } catch (e) {
+          return 0; // Return 0 if parsing fails
+      }
   }
   
   
@@ -377,7 +401,7 @@ interface PVListApiResponseData {
       return QuestionFilled;
    }
   
-  const getReclaimPolicyTagType = (policy: string): 'success' | 'warning' | 'danger' => {
+  const getReclaimPolicyTagType = (policy: string): 'success' | 'warning' | 'danger' | 'info' => {
       const lowerPolicy = policy?.toLowerCase();
       if (lowerPolicy === 'retain') return 'success'; // Safest option
       if (lowerPolicy === 'recycle') return 'warning'; // Deprecated and potentially unsafe
@@ -404,19 +428,21 @@ interface PVListApiResponseData {
     });
 
     if (response.code === 200 && response.data?.items) {
-      totalPVs.value = response.data.total; // 使用 API 返回的 total
-      allPVs.value = response.data.items.map((item) => ({
-        uid: item.uid,
-        name: item.name,
-        status: item.status || 'Unknown',
-        capacity: item.capacity || 'N/A',
-        capacityBytes: parseCapacityToBytes(item.capacity),
-        accessModes: item.accessModes || [],
-        reclaimPolicy: item.reclaimPolicy || 'N/A',
-        storageClass: item.storageClass || '',
-        volumeMode: item.volumeMode || 'N/A',
-        claim: item.claim || '', // 直接使用 claim 字段
-        createdAt: formatTimestamp(item.createdAt),
+      // 适配K8s原生PersistentVolumeList格式
+      const pvList = response.data as any; // K8s原生格式
+      totalPVs.value = pvList.items?.length || 0; // 使用 items 数组长度作为 total
+      allPVs.value = (pvList.items || []).map((item: any) => ({
+        uid: item.metadata?.uid || '',
+        name: item.metadata?.name || '',
+        status: item.status?.phase || 'Unknown',
+        capacity: item.spec?.capacity?.storage || 'N/A',
+        capacityBytes: parseCapacityToBytes(item.spec?.capacity?.storage || ''),
+        accessModes: item.spec?.accessModes || [],
+        reclaimPolicy: item.spec?.persistentVolumeReclaimPolicy || 'N/A',
+        storageClass: item.spec?.storageClassName || '',
+        volumeMode: item.spec?.volumeMode || 'N/A',
+        claim: item.spec?.claimRef ? `${item.spec.claimRef.namespace}/${item.spec.claimRef.name}` : '', // 格式化为 namespace/name
+        createdAt: formatTimestamp(item.metadata?.creationTimestamp),
         rawData: item, // 存储原始数据
       }));
       const totalPages = Math.ceil(totalPVs.value / pageSize.value);
@@ -480,7 +506,7 @@ interface PVListApiResponseData {
   
        // Simulate fetching and opening editor
        currentEditPV.value = pv.rawData || null; // Use stored raw data if available
-       yamlContent.value = yaml.dump(pv.rawData); // Simulate with stored raw data
+       yamlContent.value = JSON.stringify(pv.rawData, null, 2); // Use JSON instead of yaml for now
        dialogTitle.value = `编辑 PV: ${pv.name} (YAML)`;
        dialogVisible.value = true;
   };

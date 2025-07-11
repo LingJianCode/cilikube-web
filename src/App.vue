@@ -1,14 +1,25 @@
 <script lang="ts" setup>
-import { h } from "vue"
+import { h, onMounted } from "vue"
 import { useTheme } from "@/hooks/useTheme"
+import { useClusterStore } from "@/store/modules/clusterStore"
 import { ElNotification } from "element-plus"
 // 将 Element Plus 的语言设置为中文
 import zhCn from "element-plus/es/locale/lang/zh-cn"
 
 const { initTheme } = useTheme()
+const clusterStore = useClusterStore()
 
 /** 初始化主题 */
 initTheme()
+
+/** 初始化集群store */
+onMounted(async () => {
+  try {
+    await clusterStore.fetchAvailableClusters()
+  } catch (error) {
+    console.warn('Failed to initialize cluster store:', error)
+  }
+})
 
 /** 作者小心思 */
 ElNotification({

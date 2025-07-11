@@ -220,7 +220,7 @@ type StepType = 'idle' | 'connecting' | 'download' | 'install' | 'start' | 'fini
 const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080";
 // --- Configuration ---
 const backendBaseUrl = ref<string>(VITE_API_BASE_URL);
-const healthCheckUrl = computed(() => `${backendBaseUrl.value}/healthz`);
+const healthCheckUrl = computed(() => `${backendBaseUrl.value}/api/v1/healthz`);
 const installUrl = computed(() => `${backendBaseUrl.value}/api/v1/system/install-minikube`);
 
 // --- State ---
