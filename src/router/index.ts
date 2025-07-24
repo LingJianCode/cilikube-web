@@ -47,10 +47,20 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
   {
     path: "/",
-    // component: Layouts,
-    // redirect: "/board/dashboard",
+    component: Layouts,
+    redirect: "/board/dashboard",
+    name: "Home",
+    meta: {
+      hidden: true
+    }
+  },
+  {
+    path: "/navi",
     component: () => import("@/views/navi/index.vue"),
-    name: "Home"
+    name: "Navigation",
+    meta: {
+      hidden: true
+    }
   },
   {
     path: "/board",

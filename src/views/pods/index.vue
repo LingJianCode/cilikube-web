@@ -331,7 +331,7 @@
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted, watch, nextTick, onBeforeUnmount, markRaw } from "vue"; // Import markRaw
   import { ElMessage, ElMessageBox } from "element-plus";
-  import { request } from "@/utils/service"; // Ensure correct path
+  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config";
   import dayjs from "dayjs";
   import { debounce } from 'lodash-es';
   // Standard import for vue-monaco-editor
@@ -350,9 +350,8 @@
   } from '@element-plus/icons-vue';
   
   // --- Constants ---
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080";
-  const wsProtocol = VITE_API_BASE_URL.startsWith('https://') ? 'wss://' : 'ws://';
-  const wsHostPort = VITE_API_BASE_URL.replace(/^https?:\/\//, '');
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const wsHostPort = window.location.host;
   const WS_BASE_URL = `${wsProtocol}${wsHostPort}`;
   
   // --- Interfaces (Ensure they match backend and usage) ---
@@ -519,26 +518,19 @@ spec:
   
   
   // --- API Interaction ---
-  const fetchNamespaces = async () => {
+  const fetchNamespacesList = async () => {
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-          if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
-              // 提取命名空间名称
-              namespaces.value = response.data.items.map(ns => ns.metadata.name).sort();
-              if (namespaces.value.length > 0 && !selectedNamespace.value) {
-                   selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
-              } else if (namespaces.value.length === 0) {
-                  ElMessage.warning("未找到任何命名空间。");
-                  selectedNamespace.value = ""; allPods.value = [];
-              }
-          } else {
-              ElMessage.error(`获取命名空间失败: ${response.message || '格式错误'}`);
-              namespaces.value = []; selectedNamespace.value = ""; allPods.value = [];
+          const namespaceList = await fetchNamespaces();
+          namespaces.value = namespaceList;
+          if (namespaceList.length > 0 && !selectedNamespace.value) {
+               selectedNamespace.value = namespaceList.find(ns => ns === 'default') || namespaceList[0];
+          } else if (namespaceList.length === 0) {
+              ElMessage.warning("未找到任何命名空间。");
+              selectedNamespace.value = ""; allPods.value = [];
           }
       } catch (error: any) {
-          console.error("获取命名空间失败:", error);
-          ElMessage.error(`获取命名空间出错: ${error.message || '网络请求失败'}`);
+          ElMessage.error(error.message);
           namespaces.value = []; selectedNamespace.value = ""; allPods.value = [];
       } finally {
           loading.namespaces = false;
@@ -556,9 +548,10 @@ spec:
       if (currentPage.value < 1) { currentPage.value = 1; }
   
       try {
-          const params = { /* Server-side params if needed */ };
-          const url = `/api/v1/namespaces/${selectedNamespace.value}/pods`;
-          const response = await request<PodApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
+          const response = await kubernetesRequest<PodApiResponse>({ 
+            url: `/api/v1/namespaces/${selectedNamespace.value}/pods`,
+            method: "get"
+          });
   
           if (response.code === 200 && response.data?.items) {
               // 正确映射Kubernetes Pod对象到显示格式
@@ -606,7 +599,10 @@ spec:
        // Reuse table loading indicator or add specific loading state
        // loading.pods = true;
        try {
-           const response = await request<PodDetailApiResponse>({ url: `/api/v1/namespaces/${namespace}/pods/${name}`, method: "get", baseURL: VITE_API_BASE_URL });
+           const response = await kubernetesRequest<PodDetailApiResponse>({ 
+             url: `/api/v1/namespaces/${namespace}/pods/${name}`, 
+             method: "get" 
+           });
            if (response.code === 200 && response.data) {
                return response.data;
            } else {
@@ -642,7 +638,10 @@ const handleEditPod = async (pod: PodDisplayItem) => {
        isEditMode.value = true; editingPodName.value = pod.name;
        yamlDialogConfig.saving = true; yamlDialogConfig.content = "# 正在加载 YAML..."; yamlDialogConfig.visible = true;
        try {
-           const response = await request<YamlApiResponse>({ url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}/yaml`, method: 'get', baseURL: VITE_API_BASE_URL });
+           const response = await kubernetesRequest<YamlApiResponse>({ 
+             url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}/yaml`, 
+             method: 'get' 
+           });
            if (response.code === 200 && typeof response.data === 'string') {
                yamlDialogConfig.content = response.data;
                await nextTick(); // 等待 DOM 更新
@@ -666,10 +665,20 @@ const handleEditPod = async (pod: PodDisplayItem) => {
       try {
           let response: any; let successMsg = '';
           if (isEditMode.value && editingPodName.value) {
-              response = await request({ url: `/api/v1/namespaces/${targetNamespace}/pods/${editingPodName.value}/yaml`, method: 'put', baseURL: VITE_API_BASE_URL, headers: { 'Content-Type': 'application/yaml' }, data: currentYaml });
+              response = await kubernetesRequest({ 
+                url: `/api/v1/namespaces/${targetNamespace}/pods/${editingPodName.value}/yaml`, 
+                method: 'put', 
+                headers: { 'Content-Type': 'application/yaml' }, 
+                data: currentYaml 
+              });
               successMsg = `Pod "${editingPodName.value}" 更新成功！`;
           } else {
-              response = await request({ url: `/api/v1/namespaces/${targetNamespace}/pods`, method: 'post', baseURL: VITE_API_BASE_URL, headers: { 'Content-Type': 'application/yaml' }, data: currentYaml });
+              response = await kubernetesRequest({ 
+                url: `/api/v1/namespaces/${targetNamespace}/pods`, 
+                method: 'post', 
+                headers: { 'Content-Type': 'application/yaml' }, 
+                data: currentYaml 
+              });
               const createdName = response.data?.name || '新创建的 Pod';
               successMsg = `Pod "${createdName}" 创建成功！`;
           }
@@ -692,7 +701,10 @@ const handleEditPod = async (pod: PodDisplayItem) => {
       ).then(async () => {
           loading.pods = true;
           try {
-              await request({ url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}`, method: "delete", baseURL: VITE_API_BASE_URL });
+              await kubernetesRequest({ 
+                url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}`, 
+                method: "delete" 
+              });
               ElMessage.success(`Pod "${pod.name}" 已删除`);
               // Refresh list or optimistic update
               await fetchPodData();
@@ -956,7 +968,7 @@ const handleEditPod = async (pod: PodDisplayItem) => {
   // --- Lifecycle Hooks ---
   onMounted(async () => {
       loading.page = true;
-      await fetchNamespaces();
+      await fetchNamespacesList();
       if (selectedNamespace.value) {
           await fetchPodData();
       } else {

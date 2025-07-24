@@ -164,7 +164,7 @@
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted } from "vue"
   import { ElMessage, ElMessageBox } from "element-plus"
-  import { request } from "@/utils/service" // Ensure correct path
+  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'
 //   import yaml from 'js-yaml'; // Ensure installed

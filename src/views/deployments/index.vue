@@ -199,7 +199,7 @@
   import { ref, reactive, computed, onMounted } from "vue"
   import { ElMessage, ElMessageBox } from "element-plus"
   import type { FormInstance } from 'element-plus'
-  import { request } from "@/utils/service" // Ensure correct path
+  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config"
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'
   import yaml from 'js-yaml'; // For YAML parsing/handling (npm install js-yaml @types/js-yaml)
@@ -416,7 +416,6 @@
       if (row.desiredReplicas === 0) return 'replicas-scaled-down';
       return '';
   };
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080";
   // Extract image names from containers spec
   const extractImages = (spec: K8sDeploymentSpec | undefined): string[] => {
       if (!spec?.template?.spec?.containers) {
@@ -426,19 +425,20 @@
   };
   
   // --- API Interaction ---
-  const fetchNamespaces = async () => { /* ... same as in Pod component ... */
+  const fetchNamespacesList = async () => {
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-          if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
-              namespaces.value = response.data.items.map(ns => ns.metadata.name);
-              if (namespaces.value.length > 0 && !selectedNamespace.value) {
-                   selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
-              } else if (namespaces.value.length === 0) {
-                   ElMessage.warning("未找到任何命名空间。");
-              }
-          } else { ElMessage.error(`获取命名空间失败: ${response.message || '数据格式错误'}`); namespaces.value = []; }
-      } catch (error: any) { console.error("获取命名空间失败:", error); ElMessage.error(`获取命名空间失败: ${error.message || '网络请求失败'}`); namespaces.value = []; }
+          const namespaceList = await fetchNamespaces();
+          namespaces.value = namespaceList;
+          if (namespaceList.length > 0 && !selectedNamespace.value) {
+               selectedNamespace.value = namespaceList.find(ns => ns === 'default') || namespaceList[0];
+          } else if (namespaceList.length === 0) {
+               ElMessage.warning("未找到任何命名空间。");
+          }
+      } catch (error: any) { 
+          ElMessage.error(error.message); 
+          namespaces.value = []; 
+      }
       finally { loading.namespaces = false; }
   }
   
@@ -446,9 +446,10 @@
       if (!selectedNamespace.value) { allDeployments.value = []; totalDeployments.value = 0; apiTotalCount.value = 0; return; }
       loading.deployments = true;
       try {
-          const params: Record<string, any> = { /* Server-side params */ };
-          const url = `/api/v1/namespaces/${selectedNamespace.value}/deployments`;
-          const response = await request<DeploymentApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
+          const response = await kubernetesRequest<DeploymentApiResponse>({ 
+            url: `/api/v1/namespaces/${selectedNamespace.value}/deployments`,
+            method: "get"
+          });
   
           if (response.code === 200 && response.data?.items) {
               apiTotalCount.value = response.data.total ?? response.data.items.length; // Use API total or length
@@ -611,10 +612,9 @@
       ).then(async () => {
           loading.deployments = true;
           try {
-              const response = await request<{ code: number; message: string }>({
+              const response = await kubernetesRequest<{ code: number; message: string }>({
                   url: `/api/v1/namespaces/${deployment.namespace}/deployments/${deployment.name}`,
-                  method: "delete",
-                  baseURL: VITE_API_BASE_URL,
+                  method: "delete"
               });
                if (response.code === 200 || response.code === 202 || response.code === 204) {
                   ElMessage.success(`Deployment "${deployment.name}" 已删除`);
@@ -693,7 +693,7 @@
   // --- Lifecycle Hooks ---
   onMounted(async () => {
       loading.page = true;
-      await fetchNamespaces();
+      await fetchNamespacesList();
       if (selectedNamespace.value) {
           await fetchDeploymentData();
       }

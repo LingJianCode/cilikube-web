@@ -188,7 +188,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
-import { request } from "@/utils/service" // Ensure correct path
+import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config"
 import dayjs from "dayjs"
 import { debounce } from 'lodash-es'
 import yaml from 'js-yaml'; // Ensure installed
@@ -374,20 +374,22 @@ const simplifyRules = (rules: K8sIngressRule[] | undefined): SimpleRule[] => {
     });
     return simpleRules;
 }
-const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080";
 
 // --- API Interaction ---
-const fetchNamespaces = async () => { /* ... same as before ... */
+const fetchNamespacesList = async () => {
     loading.namespaces = true;
     try {
-        const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-        if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
-            namespaces.value = response.data.items.map(ns => ns.metadata.name);
-            if (namespaces.value.length > 0 && !selectedNamespace.value) {
-                 selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
-            } else if (namespaces.value.length === 0) { ElMessage.warning("未找到任何命名空间。"); }
-        } else { ElMessage.error(`获取命名空间失败: ${response.message || '数据格式错误'}`); namespaces.value = []; }
-    } catch (error: any) { console.error("获取命名空间失败:", error); ElMessage.error(`获取命名空间失败: ${error.message || '网络请求失败'}`); namespaces.value = []; }
+        const namespaceList = await fetchNamespaces();
+        namespaces.value = namespaceList;
+        if (namespaceList.length > 0 && !selectedNamespace.value) {
+             selectedNamespace.value = namespaceList.find(ns => ns === 'default') || namespaceList[0];
+        } else if (namespaceList.length === 0) { 
+            ElMessage.warning("未找到任何命名空间。"); 
+        }
+    } catch (error: any) { 
+        ElMessage.error(error.message); 
+        namespaces.value = []; 
+    }
     finally { loading.namespaces = false; }
 }
 
@@ -395,9 +397,10 @@ const fetchIngressData = async () => {
     if (!selectedNamespace.value) { allIngresses.value = []; totalIngresses.value = 0; return; }
     loading.ingresses = true;
     try {
-        const params: Record<string, any> = { /* Server-side params */ };
-        const url = `/api/v1/namespaces/${selectedNamespace.value}/ingresses`; // Adjust API version if needed (e.g., networking.k8s.io/v1)
-        const response = await request<IngressApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
+        const response = await kubernetesRequest<IngressApiResponse>({ 
+            url: `/api/v1/namespaces/${selectedNamespace.value}/ingresses`,
+            method: "get"
+        });
 
         if (response.code === 200) {
             if (response.data?.items) {
@@ -478,10 +481,9 @@ const handleDeleteIngress = (ingress: IngressDisplayItem) => { /* ... */
     ).then(async () => {
         loading.ingresses = true;
         try {
-            const response = await request<{ code: number; message: string }>({
-                url: `/api/v1/namespaces/${ingress.namespace}/ingresses/${ingress.name}`, // Adjust API version in URL if needed
-                method: "delete",
-                baseURL: VITE_API_BASE_URL,
+            const response = await kubernetesRequest<{ code: number; message: string }>({
+                url: `/api/v1/namespaces/${ingress.namespace}/ingresses/${ingress.name}`,
+                method: "delete"
             });
              if (response.code === 200 || response.code === 204 || response.code === 202) {
                 ElMessage.success(`Ingress "${ingress.name}" 已删除`); await fetchIngressData();
@@ -493,7 +495,7 @@ const handleDeleteIngress = (ingress: IngressDisplayItem) => { /* ... */
 // --- Lifecycle Hooks ---
 onMounted(async () => { /* ... */
     loading.page = true;
-    await fetchNamespaces();
+    await fetchNamespacesList();
     if (selectedNamespace.value) { await fetchIngressData(); }
     loading.page = false;
 });

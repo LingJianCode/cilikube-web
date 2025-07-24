@@ -22,7 +22,15 @@ router.beforeEach(async (to, _from, next) => {
   // 如果没有登陆
   if (!token) {
     // 如果在免登录的白名单中，则直接进入
-    if (isWhiteList(to)) return next()
+    if (isWhiteList(to)) {
+      // 对于无token但在白名单的路由，仍需要初始化权限
+      if (userStore.roles.length === 0 && !routeSettings.dynamic) {
+        userStore.setRoles(routeSettings.defaultRoles)
+        permissionStore.setAllRoutes()
+        permissionStore.addRoutes.forEach((route) => router.addRoute(route))
+      }
+      return next()
+    }
     // 其他没有访问权限的页面将被重定向到登录页面
     return next("/login")
   }
@@ -35,13 +43,30 @@ router.beforeEach(async (to, _from, next) => {
   // 如果用户已经获得其权限角色
   if (userStore.roles.length !== 0) return next()
 
-  // 否则要重新获取权限角色
+  // 如果动态路由功能关闭，直接设置默认角色和所有路由
+  if (!routeSettings.dynamic) {
+    try {
+      // 设置默认角色
+      userStore.setRoles(routeSettings.defaultRoles)
+      // 生成可访问的 Routes
+      permissionStore.setAllRoutes()
+      // 将 "有访问权限的动态路由" 添加到 Router 中
+      permissionStore.addRoutes.forEach((route) => router.addRoute(route))
+      // 确保添加路由已完成
+      return next({ ...to, replace: true })
+    } catch (err: any) {
+      ElMessage.error(err.message || "路由初始化过程发生错误")
+      return next("/login")
+    }
+  }
+
+  // 否则要重新获取权限角色（动态路由模式）
   try {
     await userStore.getInfo()
     // 注意：角色必须是一个数组！ 例如: ["admin"] 或 ["developer", "editor"]
     const roles = userStore.roles
     // 生成可访问的 Routes
-    routeSettings.dynamic ? permissionStore.setRoutes(roles) : permissionStore.setAllRoutes()
+    permissionStore.setRoutes(roles)
     // 将 "有访问权限的动态路由" 添加到 Router 中
     permissionStore.addRoutes.forEach((route) => router.addRoute(route))
     // 确保添加路由已完成

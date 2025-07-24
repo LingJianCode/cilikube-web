@@ -142,7 +142,7 @@
   import { ref, computed, onMounted, reactive, nextTick, watch } from "vue"
   import { ElMessage, ElMessageBox, ElLoading } from "element-plus" // Keep ElLoading for create/delete potentially
   import type { FormInstance, FormRules } from 'element-plus'
-  import { request } from "@/utils/service" // Ensure this path is correct
+  import { kubernetesRequest, KubernetesApiResponse } from "@/utils/api-config"
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'; // Import debounce
   import { storeToRefs } from "pinia"
@@ -276,7 +276,6 @@
   const isSystemNamespace = (name: string): boolean => {
       return systemNamespaces.includes(name);
   }
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.100:8080";
   
   // --- Cluster Store Integration ---
   const clusterStore = useClusterStore()
@@ -291,11 +290,9 @@
     if (loading.value) return;
     loading.value = true
     try {
-      const apiUrl = `/api/v1/namespaces`
-      const response = await request<NamespaceApiResponse>({
-        url: apiUrl,
-        method: "get",
-        baseURL: VITE_API_BASE_URL,
+      const response = await kubernetesRequest<NamespaceApiResponse>({
+        url: `/api/v1/namespaces`,
+        method: "get"
       })
       if (response.code === 200 && response.data?.items) {
         allNamespaces.value = response.data.items.map(item => ({
@@ -327,7 +324,6 @@
       if (valid) {
         createLoading.value = true
         try {
-          const apiUrl = `/api/v1/namespaces`
           const payload = {
             apiVersion: 'v1',
             kind: 'Namespace',
@@ -335,10 +331,9 @@
               name: form.name,
             }
           };
-          const response = await request<{ code: number; message: string }>({
-            url: apiUrl,
+          const response = await kubernetesRequest<{ code: number; message: string }>({
+            url: `/api/v1/namespaces`,
             method: "post",
-            baseURL: VITE_API_BASE_URL,
             data: payload
           })
           if (response.code === 201 || response.code === 200) {
@@ -381,11 +376,9 @@
         lock: true, text: `正在删除命名空间 ${namespace.name}...`, background: 'rgba(0, 0, 0, 0.7)'
       });
       try {
-        const apiUrl = `/api/v1/namespaces/${namespace.name}`
-        const response = await request<{ code: number; message: string }>({
-          url: apiUrl,
-          method: "delete",
-          baseURL: VITE_API_BASE_URL,
+        const response = await kubernetesRequest<{ code: number; message: string }>({
+          url: `/api/v1/namespaces/${namespace.name}`,
+          method: "delete"
         });
         if (response.code === 200 || response.code === 202) {
           ElMessage.success(`命名空间 \"${namespace.name}\" 已删除`);

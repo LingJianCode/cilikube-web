@@ -32,6 +32,10 @@ export const useUserStore = defineStore("user", () => {
     // 验证返回的 roles 是否为一个非空数组，否则塞入一个没有任何作用的默认角色，防止路由守卫逻辑进入无限循环
     roles.value = data.roles?.length > 0 ? data.roles : routeSettings.defaultRoles
   }
+  /** 设置角色 */
+  const setRoles = (newRoles: string[]) => {
+    roles.value = newRoles
+  }
   /** 模拟角色变化 */
   const changeRoles = async (role: string) => {
     const newToken = "token-" + role
@@ -62,7 +66,7 @@ export const useUserStore = defineStore("user", () => {
     }
   }
 
-  return { token, roles, username, login, getInfo, changeRoles, logout, resetToken }
+  return { token, roles, username, login, getInfo, setRoles, changeRoles, logout, resetToken }
 })
 
 /** 在 setup 外使用 */
