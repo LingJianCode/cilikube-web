@@ -105,10 +105,9 @@
                   {{ row.volumeName || '-' }}
               </template>
           </el-table-column>
-          <!-- Renamed prop to match API response 'requestedStorage' -->
-          <el-table-column prop="requestedStorage" label="请求容量" min-width="110" sortable="custom" align="right">
+          <el-table-column prop="capacity" label="请求容量" min-width="110" sortable="custom" align="right">
                <template #default="{ row }">
-                  {{ formatCapacity(row.requestedStorage) }}
+                  {{ formatCapacity(row.capacity) }}
               </template>
           </el-table-column>
            <el-table-column prop="actualCapacity" label="实际容量" min-width="110" sortable="custom" align="right">
@@ -190,7 +189,7 @@
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted } from "vue"
   import { ElMessage, ElMessageBox } from "element-plus"
-  import { request } from "@/utils/service" // Ensure correct path
+  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'
   import yaml from 'js-yaml'; // Ensure installed
@@ -224,7 +223,7 @@
   
   interface PVCListApiResponseData { items: PVCApiItem[]; total: number } // Assuming total is always present now
   interface PVCApiResponse { code: number; data: PVCListApiResponseData; message: string }
-  interface NamespaceListResponse { code: number; data: { items: string[] }; message: string }
+  interface NamespaceListResponse { code: number; data: { items: Array<{ metadata: { name: string } }> }; message: string }
   
   // Internal Display/Table Item - adjusted to use direct fields from PVCApiItem
   interface PVCDisplayItem {
@@ -337,14 +336,13 @@
   const getStatusIcon = (status: string) => { /* ... */ const lowerStatus = status?.toLowerCase(); if (lowerStatus === 'bound') return LinkIcon; if (lowerStatus === 'pending') return LoadingIcon; if (lowerStatus === 'lost') return CloseBold; return QuestionFilled; }
   const getSpinClass = (status: string) => { /* ... */ return status?.toLowerCase() === 'pending' ? 'is-loading' : ''; }
   
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080"; // Ensure this is set correctly in your .env file
   // --- API Interaction ---
   const fetchNamespaces = async () => { /* ... same as before ... */
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
-          if (response.code === 200 && response.data?.items && Array.isArray(response.data.items)) {
-              namespaces.value = response.data.items;
+          const response = await kubernetesRequest<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get" });
+          if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
+              namespaces.value = response.data.items.map(ns => ns.metadata.name);
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
                    selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
               } else if (namespaces.value.length === 0) { ElMessage.warning("未找到任何命名空间。"); }
@@ -362,7 +360,7 @@
           const params: Record<string, any> = { /* Server-side params if needed */ };
           // ** Use correct endpoint name from backend routing **
           const url = `/api/v1/namespaces/${selectedNamespace.value}/persistentvolumeclaims`; // Make sure this matches Go route
-          const response = await request<PVCApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
+          const response = await kubernetesRequest<PVCApiResponse>({ url, method: "get", params });
   
           if (response.code === 200 && response.data?.items && Array.isArray(response.data.items)) {
               totalPvcs.value = response.data.total; // Use total from API
@@ -493,10 +491,9 @@
       ).then(async () => {
           loading.pvcs = true;
           try {
-              const response = await request<{ code: number; message: string }>({
-                  url: `/api/v1/namespaces/${pvc.namespace}/persistentvolumeclaims/${pvc.name}`, // Correct endpoint
-                  method: "delete",
-                  baseURL: VITE_API_BASE_URL,
+              const response = await kubernetesRequest<{ code: number; message: string }>({
+                  url: `/api/v1/namespaces/${pvc.namespace}/persistentvolumeclaims/${pvc.name}`,
+                  method: "delete"
               });
                if (response.code === 200 || response.code === 204 || response.code === 202) {
                   ElMessage.success(`PVC "${pvc.name}" 已删除`); await fetchPvcData();

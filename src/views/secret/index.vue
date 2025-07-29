@@ -158,7 +158,7 @@
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted } from "vue"
   import { ElMessage, ElMessageBox } from "element-plus"
-  import { request } from "@/utils/service" // Ensure correct path
+  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'
   import yaml from 'js-yaml'; // Ensure installed
@@ -296,12 +296,11 @@
   // --- Helper Functions ---
   const formatTimestamp = (timestamp: string): string => { /* ... */ if (!timestamp) return 'N/A'; return dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss"); }
   const formatSecretType = (type: string | undefined): string => { /* ... */ if (!type) return 'Opaque'; if (type.startsWith('kubernetes.io/')) { return type.substring('kubernetes.io/'.length); } return type; };
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080"; // Ensure this is set in your environment variables
   // --- API Interaction ---
   const fetchNamespaces = async () => { /* ... same as before ... */
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL });
+          const response = await kubernetesRequest<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get" });
           if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
               namespaces.value = response.data.items.map(ns => ns.metadata.name);
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
@@ -321,7 +320,7 @@
           const params: Record<string, any> = { /* Server-side params */ };
           const url = `/api/v1/namespaces/${selectedNamespace.value}/secrets`;
           // ** Expect the SIMPLIFIED list response structure **
-          const response = await request<SecretApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
+          const response = await kubernetesRequest<SecretApiResponse>({ url, method: "get", params });
   
           if (response.code === 200 && response.data?.items && Array.isArray(response.data.items)) {
               totalSecrets.value = response.data.total ?? response.data.items.length;
@@ -368,22 +367,21 @@
   
   
   // --- Dialog and CRUD Actions ---
-  const handleAddSecret = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning("请先选择一个命名空间"); return; } currentEditSecret.value = null; yamlContent.value = placeholderYaml.value; dialogTitle.value = "创建 Secret (YAML)"; dialogVisible.value = true; };
+  const handleAddSecret = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning("请先选择一个命名空间"); return; } currentEditSecretDetail.value = null; yamlContent.value = placeholderYaml.value; dialogTitle.value = "创建 Secret (YAML)"; dialogVisible.value = true; };
   
   const editSecretYaml = async (secret: SecretDisplayItem) => {
       ElMessage.info(`获取 Secret "${secret.name}" 的详细信息...`);
       loading.secrets = true; // Indicate loading
-      currentEditSecret.value = null; // Clear previous edit data
+      currentEditSecretDetail.value = null; // Clear previous edit data
       yamlContent.value = ""; // Clear previous yaml
       try {
          // ** Fetch the FULL details using the GET endpoint **
-         const response = await request<SecretDetailApiResponse>({
+         const response = await kubernetesRequest<SecretDetailApiResponse>({
              url: `/api/v1/namespaces/${secret.namespace}/secrets/${secret.name}`,
-             method: 'get',
-             baseURL: VITE_API_BASE_URL,
+             method: 'get'
          });
          if (response.code === 200 && response.data) {
-              currentEditSecret.value = response.data; // Store full data from GET request
+              currentEditSecretDetail.value = response.data; // Store full data from GET request
   
               // ** Reconstruct standard K8s object for YAML editor **
               //    (Ensure SecretDetailBackend matches K8s structure or adapt this reconstruction)
@@ -423,7 +421,7 @@
   
   const handleSaveYaml = async () => { /* ... */
       // Determine namespace
-      const namespaceToUse = currentEditSecret.value?.metadata?.namespace || selectedNamespace.value;
+      const namespaceToUse = currentEditSecretDetail.value?.metadata?.namespace || selectedNamespace.value;
       if (!namespaceToUse) { ElMessage.error("无法确定目标命名空间。"); return; }
   
       loading.dialogSave = true;
@@ -432,8 +430,8 @@
       // try {
       //     let parsedYaml = yaml.load(currentYaml); ... validate ...
       //     const name = parsedYaml.metadata.name;
-      //     const method = currentEditSecret.value ? 'put' : 'post';
-      //     const url = currentEditSecret.value ? `/api/v1/namespaces/${namespaceToUse}/secrets/${name}` : `/api/v1/namespaces/${namespaceToUse}/secrets`;
+      //     const method = currentEditSecretDetail.value ? 'put' : 'post';
+      //     const url = currentEditSecretDetail.value ? `/api/v1/namespaces/${namespaceToUse}/secrets/${name}` : `/api/v1/namespaces/${namespaceToUse}/secrets`;
       //     // Backend needs to handle the parsed JSON object (corev1.Secret)
       //     // Ensure frontend YAML editor content parses correctly to required Go struct
       //     const response = await request({ url, method, data: parsedYaml, baseURL:"..." });
@@ -442,7 +440,7 @@
   
        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate
        loading.dialogSave = false; dialogVisible.value = false;
-       const action = currentEditSecret.value ? '更新' : '创建';
+       const action = currentEditSecretDetail.value ? '更新' : '创建';
        ElMessage.success(`模拟 Secret ${action}成功`); fetchSecretData();
   };
   
@@ -453,10 +451,9 @@
       ).then(async () => {
           loading.secrets = true;
           try {
-              const response = await request<{ code: number; message: string }>({
+              const response = await kubernetesRequest<{ code: number; message: string }>({
                   url: `/api/v1/namespaces/${secret.namespace}/secrets/${secret.name}`,
-                  method: "delete",
-                  baseURL: VITE_API_BASE_URL,
+                  method: "delete"
               });
                if (response.code === 200 || response.code === 204 || response.code === 202) {
                   ElMessage.success(`Secret "${secret.name}" 已删除`); await fetchSecretData();

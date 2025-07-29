@@ -118,10 +118,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { request } from '@/utils/service'; // Adjust path
+import { kubernetesRequest, KubernetesApiResponse } from '@/utils/api-config'; // Use unified API system
 import { Platform, Monitor, Setting, Refresh } from '@element-plus/icons-vue';
 
-const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.100:8080";
 // --- Data Interfaces ---
 interface TechItem {
   name: string;
@@ -238,10 +237,9 @@ const fetchBackendStack = async () => {
     loading.backend = true;
     backendError.value = null;
     try {
-        const response = await request<{ code: number; data: BackendDependency[]; message: string }>({
+        const response = await kubernetesRequest<{ code: number; data: BackendDependency[]; message: string }>({
             url: '/api/v1/summary/backend-dependencies', // Match Go route
-            method: 'get',
-            baseURL: 'VITE_API_BASE_URL', // If needed
+            method: 'get'
         });
         if (response.code === 200 && Array.isArray(response.data)) {
             // Sort fetched data alphabetically by path

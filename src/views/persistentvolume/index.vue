@@ -237,7 +237,7 @@
     claim: string // namespace/pvcName
     createdAt: string
     // Raw API data for editing
-    rawData?: PVResponse // Store raw API response if needed for PUT/YAML edit
+    rawData?: K8sPersistentVolume // Store raw API response if needed for PUT/YAML edit
   }
   
   
@@ -256,7 +256,7 @@
   // Dialog state (YAML focus)
   const dialogVisible = ref(false)
   const dialogTitle = ref("创建 PV (YAML)");
-  const currentEditPV = ref<PVResponse | null>(null); // Store raw data for editing
+  const currentEditPV = ref<K8sPersistentVolume | null>(null); // Store raw data for editing
   const yamlContent = ref("");
   const placeholderYaml = ref(`apiVersion: v1
   kind: PersistentVolume
@@ -413,18 +413,16 @@
        return mode === 'Block' ? 'primary' : 'info';
   }
   
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080"; // Adjust as needed
   // --- API Interaction ---
   const fetchPVData = async () => {
   loading.pvs = true;
   try {
     const params: Record<string, any> = {};
     const url = `/api/v1/persistentvolumes`;
-    const response = await request<PVApiResponse>({ 
+    const response = await kubernetesRequest<PVApiResponse>({ 
       url, 
       method: "get", 
-      params, 
-      baseURL: VITE_API_BASE_URL
+      params
     });
 
     if (response.code === 200 && response.data?.items) {
@@ -569,10 +567,9 @@
       ).then(async () => {
           loading.pvs = true;
           try {
-              const response = await request<{ code: number; message: string }>({
+              const response = await kubernetesRequest<{ code: number; message: string }>({
                   url: `/api/v1/persistentvolumes/${pv.name}`,
-                  method: "delete",
-                  baseURL: "VITE_API_BASE_URL",
+                  method: "delete"
               });
                if (response.code === 200 || response.code === 204 || response.code === 202) { // Check for success codes
                   ElMessage.success(`PV "${pv.name}" 已删除`);

@@ -151,7 +151,7 @@
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted } from "vue"
   import { ElMessage, ElMessageBox } from "element-plus"
-  import { request } from "@/utils/service" // Ensure correct path
+  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
   import dayjs from "dayjs"
   import { debounce } from 'lodash-es'
   import yaml from 'js-yaml'; // Ensure installed
@@ -160,7 +160,6 @@
       Plus as PlusIcon, Search as SearchIcon, Refresh as RefreshIcon, Tickets as TicketsIcon, // Icon for CM
       EditPen as EditPenIcon, Delete as DeleteIcon
   } from '@element-plus/icons-vue'
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://192.168.1.100:8080";
   // --- Interfaces ---
   // ** Adjusted to match a simplified API response (like the corrected PVC) **
   interface ConfigMapApiItem {
@@ -285,7 +284,7 @@
   const fetchNamespaces = async () => { /* ... same as before ... */
       loading.namespaces = true;
       try {
-          const response = await request<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get", baseURL: VITE_API_BASE_URL});
+          const response = await kubernetesRequest<NamespaceListResponse>({ url: "/api/v1/namespaces", method: "get"});
           if (response.code === 200 && response.data && Array.isArray(response.data.items)) {
               namespaces.value = response.data.items.map(ns => ns.metadata.name);
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
@@ -305,7 +304,7 @@
           const params: Record<string, any> = { /* Server-side params */ };
           const url = `/api/v1/namespaces/${selectedNamespace.value}/configmaps`;
           // ** Use the interface matching the SIMPLIFIED API list response **
-          const response = await request<ConfigMapApiResponse>({ url, method: "get", params, baseURL: VITE_API_BASE_URL });
+          const response = await kubernetesRequest<ConfigMapApiResponse>({ url, method: "get", params });
   
           if (response.code === 200 && response.data?.items && Array.isArray(response.data.items)) {
               totalConfigMaps.value = response.data.total ?? response.data.items.length;
@@ -357,10 +356,9 @@
       loading.configmaps = true; // Indicate loading for the fetch
       try {
          // ** Fetch the FULL details using the GET endpoint **
-         const response = await request<ConfigMapDetailApiResponse>({
+         const response = await kubernetesRequest<ConfigMapDetailApiResponse>({
              url: `/api/v1/namespaces/${cm.namespace}/configmaps/${cm.name}`,
-             method: 'get',
-             baseURL: VITE_API_BASE_URL,
+             method: 'get'
          });
          if (response.code === 200 && response.data) {
               currentEditCm.value = response.data; // Store full data from GET request
@@ -423,10 +421,9 @@
       ).then(async () => {
           loading.configmaps = true;
           try {
-              const response = await request<{ code: number; message: string }>({
+              const response = await kubernetesRequest<{ code: number; message: string }>({
                   url: `/api/v1/namespaces/${cm.namespace}/configmaps/${cm.name}`,
-                  method: "delete",
-                  baseURL: VITE_API_BASE_URL,
+                  method: "delete"
               });
                if (response.code === 200 || response.code === 204 || response.code === 202) {
                   ElMessage.success(`ConfigMap "${cm.name}" 已删除`); await fetchConfigMapData();
