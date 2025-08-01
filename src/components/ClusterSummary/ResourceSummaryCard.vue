@@ -1,42 +1,96 @@
 <template>
-    <el-card class="summary-card" shadow="never" v-loading="loading">
-      <template #header>
-        <div class="card-header">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>集群资源概览</span>
-           <el-tooltip content="刷新" placement="top">
-              <el-button :icon="Refresh" circle text size="small" @click="fetchSummary" :loading="loading" class="refresh-btn"/>
-           </el-tooltip>
+  <div class="resource-summary-container">
+    <!-- 简洁头部 -->
+    <div class="summary-header">
+      <div class="header-content">
+        <div class="title-section">
+          <el-icon class="title-icon"><DataAnalysis /></el-icon>
+          <h3 class="main-title">集群资源概览</h3>
+          <el-tag type="success" size="small" class="status-tag">运行中</el-tag>
         </div>
-      </template>
-      <div v-if="error" class="error-message">
-        <el-alert type="error" :closable="false" show-icon>
-          加载资源概览失败: {{ error }}
-        </el-alert>
+        <div class="header-actions">
+          <span class="last-update" v-if="lastUpdateTime">{{ lastUpdateTime }}</span>
+          <el-button 
+            :icon="Refresh" 
+            text 
+            :loading="loading" 
+            @click="fetchSummary" 
+            class="refresh-btn"
+          >
+            刷新
+          </el-button>
+        </div>
       </div>
-      <div v-else-if="!summaryData" class="loading-placeholder">
-        正在加载资源数量...
+    </div>
+
+    <!-- 统计概览 -->
+    <div v-if="summaryData && displayItems.length > 0" class="stats-overview">
+      <div class="stat-item">
+        <div class="stat-number">{{ getTotalResources() }}</div>
+        <div class="stat-label">总资源</div>
       </div>
-      <el-row v-else :gutter="15" class="summary-grid">
-        <el-col v-for="item in displayItems" :key="item.key" :xs="12" :sm="8" :md="6" :lg="4">
-          <div class="summary-item">
-            <div class="item-icon" :style="{ backgroundColor: item.color + '1A' }">
-              <el-icon :size="24" :color="item.color">
-                <component :is="item.icon" />
-              </el-icon>
+      <div class="stat-item">
+        <div class="stat-number">{{ getActiveResources() }}</div>
+        <div class="stat-label">活跃类型</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number">{{ summaryData.namespaces || 0 }}</div>
+        <div class="stat-label">命名空间</div>
+      </div>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-if="error" class="error-state">
+      <el-icon class="error-icon"><Warning /></el-icon>
+      <div class="error-text">{{ error }}</div>
+      <el-button type="primary" size="small" @click="fetchSummary">重试</el-button>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-else-if="loading && !summaryData" class="loading-state">
+      <el-icon class="loading-icon"><Loading /></el-icon>
+      <span>加载中...</span>
+    </div>
+
+    <!-- 资源网格 -->
+    <div v-else-if="summaryData" class="resources-grid">
+      <TransitionGroup name="resource" tag="div" class="grid-container">
+        <div 
+          v-for="(item, index) in displayItems" 
+          :key="item.key" 
+          class="resource-card"
+          :style="{ '--delay': index * 0.02 + 's' }"
+          @click="handleResourceClick(item)"
+        >
+          <div class="card-content">
+            <div class="resource-icon" :style="{ color: item.color }">
+              <el-icon><component :is="item.icon" /></el-icon>
             </div>
-            <div class="item-content">
-              <div class="item-label">{{ item.label }}</div>
-              <div class="item-value">{{ formatCount(summaryData[item.key]) }}</div>
+            <div class="resource-info">
+              <div class="resource-name">{{ item.label }}</div>
+              <div class="resource-count">{{ formatCount(summaryData[item.key]) }}</div>
             </div>
+            <el-tag 
+              :type="getResourceStatus(summaryData[item.key]).type" 
+              size="small"
+              effect="plain"
+              class="resource-status"
+            >
+              {{ getResourceStatus(summaryData[item.key]).text }}
+            </el-tag>
           </div>
-        </el-col>
-         <el-col v-if="displayItems.length === 0 && !loading" :span="24">
-              <el-empty description="暂无资源数据" :image-size="60" />
-         </el-col>
-      </el-row>
-    </el-card>
-  </template>
+        </div>
+      </TransitionGroup>
+
+      <!-- 空状态 -->
+      <div v-if="displayItems.length === 0" class="empty-state">
+        <el-icon class="empty-icon"><Files /></el-icon>
+        <div class="empty-text">暂无资源数据</div>
+        <el-button type="primary" size="small" @click="fetchSummary">刷新</el-button>
+      </div>
+    </div>
+  </div>
+</template>
   
   <script setup lang="ts">
   import { ref, onMounted, computed } from 'vue';
@@ -44,7 +98,9 @@
   import { request } from '@/utils/service'; // Adjust path
   import {
       DataAnalysis, Refresh, Platform, CollectionTag, Files, TakeawayBox, Service,
-      Coin, MessageBox, SetUp, Notebook, Key, Lock, Connection, Warning // Added more icons
+      Coin, MessageBox, SetUp, Notebook, Key, Lock, Connection, Warning, // Added more icons
+      Loading, Clock, CircleCheck, View, TrendCharts, SuccessFilled, InfoFilled,
+      CaretTop, Minus
   } from '@element-plus/icons-vue';
   
   interface ResourceSummaryData {
@@ -73,6 +129,18 @@
   const loading = ref(false);
   const summaryData = ref<ResourceSummaryData | null>(null);
   const error = ref<string | null>(null);
+  const lastUpdateTime = ref<string>('');
+
+  // 更新最后更新时间
+  const updateLastUpdateTime = () => {
+    const now = new Date();
+    lastUpdateTime.value = now.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
   
   // Define the display order, labels, icons, and colors
   const displayConfig: DisplayConfig[] = [
@@ -101,27 +169,73 @@
   const fetchSummary = async () => {
     loading.value = true;
     error.value = null;
-    summaryData.value = null; // Clear previous data
     try {
       const response = await request<{ code: number; data: ResourceSummaryData; message: string }>({
-        url: '/api/v1/summary/resources', // Match your Go route
+        url: '/api/v1/summary/resources',
         method: 'get',
-        baseURL: VITE_API_BASE_URL // If needed
-        // VITE_API_BASE_URL/api/v1/summary/resources
+        baseURL: VITE_API_BASE_URL
       });
       if (response.code === 200 && response.data) {
         summaryData.value = response.data;
+        updateLastUpdateTime();
       } else {
         throw new Error(response.message || '获取数据格式错误');
       }
     } catch (err: any) {
       console.error("Failed to fetch resource summary:", err);
       error.value = err.message || '网络请求失败';
-      // Optionally show ElMessage
-      // ElMessage.error(`加载资源概览失败: ${error.value}`);
     } finally {
       loading.value = false;
     }
+  };
+
+  // 获取资源状态
+  const getResourceStatus = (count: number | null | undefined) => {
+    if (count === null || count === undefined) {
+      return { type: 'info', text: '未知' };
+    }
+    if (count === 0) {
+      return { type: 'info', text: '空闲' };
+    }
+    if (count > 50) {
+      return { type: 'warning', text: '繁忙' };
+    }
+    return { type: 'success', text: '正常' };
+  };
+
+  // 获取资源进度（模拟使用率）
+  const getResourceProgress = (key: string, count: number | null | undefined): number => {
+    if (count === null || count === undefined || count === 0) return 0;
+    
+    // 根据不同资源类型设置不同的进度计算逻辑
+    const progressMap: Record<string, number> = {
+      'nodes': Math.min((count / 10) * 100, 100),
+      'pods': Math.min((count / 100) * 100, 100),
+      'namespaces': Math.min((count / 20) * 100, 100),
+      'deployments': Math.min((count / 50) * 100, 100),
+      'services': Math.min((count / 30) * 100, 100),
+    };
+    
+    return Math.round(progressMap[key] || Math.min((count / 20) * 100, 100));
+  };
+
+  // 处理资源卡片点击
+  const handleResourceClick = (item: DisplayConfig) => {
+    ElMessage.info(`点击了 ${item.label}，功能开发中...`);
+  };
+
+  // 获取总资源数
+  const getTotalResources = (): number => {
+    if (!summaryData.value) return 0;
+    return Object.values(summaryData.value).reduce((total, count) => {
+      return total + (count || 0);
+    }, 0);
+  };
+
+  // 获取活跃资源数（非零资源）
+  const getActiveResources = (): number => {
+    if (!summaryData.value) return 0;
+    return Object.values(summaryData.value).filter(count => count && count > 0).length;
   };
   
   const formatCount = (count: number | null | undefined): string | number => {
@@ -142,80 +256,407 @@
   </script>
   
   <style lang="scss" scoped>
-  .summary-card {
-    border: 1px solid var(--el-border-color-lighter);
-    background-color: var(--el-bg-color);
-  
-    .card-header {
+  .resource-summary-container {
+    background: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: #d1d5db;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+  }
+
+  // 简洁头部
+  .summary-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #f3f4f6;
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .title-section {
       display: flex;
       align-items: center;
+      gap: 12px;
+
+      .title-icon {
+        font-size: 18px;
+        color: #3b82f6;
+      }
+
+      .main-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+      }
+
+      .status-tag {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+      }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .last-update {
+        font-size: 12px;
+        color: #6b7280;
+      }
+
+      .refresh-btn {
+        font-size: 12px;
+        font-weight: 500;
+        color: #3b82f6;
+      }
+    }
+  }
+
+  // 统计概览
+  .stats-overview {
+    display: flex;
+    padding: 16px 24px;
+    background: #f9fafb;
+    border-bottom: 1px solid #f3f4f6;
+
+    .stat-item {
+      flex: 1;
+      text-align: center;
+
+      &:not(:last-child) {
+        border-right: 1px solid #e5e7eb;
+      }
+
+      .stat-number {
+        font-size: 24px;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1;
+        margin-bottom: 4px;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: #6b7280;
+        font-weight: 500;
+      }
+    }
+  }
+
+  // 错误状态
+  .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 32px 24px;
+    text-align: center;
+
+    .error-icon {
+      font-size: 32px;
+      color: #ef4444;
+    }
+
+    .error-text {
+      font-size: 14px;
+      color: #6b7280;
+      max-width: 300px;
+    }
+  }
+
+  // 加载状态
+  .loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 24px;
+    color: #6b7280;
+    font-size: 14px;
+
+    .loading-icon {
       font-size: 16px;
-      font-weight: 600;
-      color: var(--el-text-color-primary);
-      gap: 8px; // Space between icon and text
-  
-       .refresh-btn {
-          margin-left: auto; // Push refresh button to the right
-       }
+      animation: spin 1s linear infinite;
     }
-  
-    .error-message {
-      padding: 10px 0;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  // 资源网格
+  .resources-grid {
+    padding: 12px 16px 16px;
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
     }
-    .loading-placeholder {
-       padding: 20px;
-       text-align: center;
-       color: var(--el-text-color-secondary);
+
+    .resource-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      animation: slideIn 0.3s ease-out;
+      animation-delay: var(--delay);
+      animation-fill-mode: both;
+
+      &:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      }
+
+      .card-content {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 90px;
+      }
+
+      .resource-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        background: #f9fafb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        align-self: flex-start;
+
+        .el-icon {
+          font-size: 16px;
+        }
+      }
+
+      .resource-info {
+        flex: 1;
+
+        .resource-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: #374151;
+          margin-bottom: 4px;
+          line-height: 1.2;
+        }
+
+        .resource-count {
+          font-size: 20px;
+          font-weight: 700;
+          color: #111827;
+          line-height: 1;
+        }
+      }
+
+      .resource-status {
+        align-self: flex-end;
+        
+        .el-tag {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 2px 6px;
+          border-radius: 3px;
+        }
+      }
     }
-  
-    .summary-grid {
-      padding-top: 5px; // Small space below header
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
     }
-  
-    .summary-item {
-      display: flex;
-      align-items: center;
-      padding: 12px 8px;
-      margin-bottom: 10px;
-      background-color: var(--el-bg-color); // Match card background or slightly lighter/darker
-      border-radius: 4px;
-      // border: 1px solid var(--el-border-color-extra-light);
-       transition: background-color 0.2s ease;
-       &:hover {
-           background-color: var(--el-fill-color-lighter);
-       }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
-  
-    .item-icon {
-      flex-shrink: 0;
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-right: 12px;
-      // Background color is set inline
+  }
+
+  // 空状态
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 32px 24px;
+    text-align: center;
+
+    .empty-icon {
+      font-size: 32px;
+      color: #9ca3af;
     }
-  
-    .item-content {
-      overflow: hidden; // Prevent text overflow
+
+    .empty-text {
+      font-size: 14px;
+      color: #6b7280;
     }
-  
-    .item-label {
-      font-size: 13px;
-      color: var(--el-text-color-secondary);
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+  }
+
+  // 过渡动画
+  .resource-enter-active,
+  .resource-leave-active {
+    transition: all 0.2s ease;
+  }
+
+  .resource-enter-from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  .resource-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  // 响应式设计
+  @media (max-width: 768px) {
+    .resource-summary-container {
+      margin: 0 -16px 20px;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
     }
-  
-    .item-value {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--el-text-color-primary);
-      line-height: 1.2;
+
+    .summary-header {
+      padding: 16px 20px 12px;
+
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .title-section {
+        align-self: stretch;
+        justify-content: space-between;
+      }
+
+      .header-actions {
+        align-self: stretch;
+        justify-content: space-between;
+      }
+    }
+
+    .stats-overview {
+      padding: 12px 20px;
+
+      .stat-item .stat-number {
+        font-size: 20px;
+      }
+    }
+
+    .resources-grid {
+      padding: 10px 20px 16px;
+
+      .grid-container {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+      }
+
+      .resource-card {
+        .card-content {
+          padding: 10px;
+          min-height: 80px;
+        }
+
+        .resource-icon {
+          width: 28px;
+          height: 28px;
+
+          .el-icon {
+            font-size: 14px;
+          }
+        }
+
+        .resource-info {
+          .resource-name {
+            font-size: 12px;
+          }
+
+          .resource-count {
+            font-size: 18px;
+          }
+        }
+      }
+    }
+
+    .error-state,
+    .empty-state {
+      padding: 24px 20px;
+    }
+
+    .loading-state {
+      padding: 24px 20px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .stats-overview {
+      flex-direction: column;
+      gap: 12px;
+
+      .stat-item {
+        &:not(:last-child) {
+          border-right: none;
+          border-bottom: 1px solid #e5e7eb;
+          padding-bottom: 12px;
+        }
+      }
+    }
+
+    .resources-grid {
+      .grid-container {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 6px;
+      }
+
+      .resource-card {
+        .card-content {
+          padding: 8px;
+          min-height: 70px;
+          gap: 6px;
+        }
+
+        .resource-icon {
+          width: 24px;
+          height: 24px;
+
+          .el-icon {
+            font-size: 12px;
+          }
+        }
+
+        .resource-info {
+          .resource-name {
+            font-size: 11px;
+          }
+
+          .resource-count {
+            font-size: 16px;
+          }
+        }
+
+        .resource-status .el-tag {
+          font-size: 9px;
+          padding: 1px 4px;
+        }
+      }
     }
   }
   </style>
