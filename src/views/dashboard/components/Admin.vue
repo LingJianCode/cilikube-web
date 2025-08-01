@@ -55,6 +55,7 @@
     </div>
 
     <!-- 资源概览卡片 --> 
+    <ResourceSummaryCard />
 
     
     <!-- 健康状况指示灯 -->
@@ -399,6 +400,7 @@ import {
 } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import ResourceSummaryCard from '@/components/ClusterSummary/ResourceSummaryCard.vue'
+import mockClusterData from './clusterData'
 
 // 注册 ECharts 组件
 use([
@@ -464,8 +466,11 @@ const timeShortcuts = [
   }
 ]
 
-// 模拟数据
-const namespaces = ref(['default', 'kube-system', 'monitoring', 'logging', 'dev', 'prod'])
+// 获取模拟数据
+const clusterData = mockClusterData()
+
+// 使用模拟数据
+const namespaces = ref(clusterData.namespaces)
 
 const healthStatus = ref([
   { label: '集群状态', value: '健康', color: '#67C23A' },
@@ -480,151 +485,23 @@ const alertSummary = ref([
   { label: '通知', count: 8, color: '#909399', trend: 3 }
 ])
 
-const overviewData = ref([
-  { title: '集群节点', value: '5', percent: 95, total: '', icon: DataBoardIcon, color: '#409EFF' },
-  { title: '命名空间', value: '6', percent: 75, total: '8', icon: CollectionIcon, color: '#67C23A' },
-  { title: '运行Pods', value: '148', percent: 82, total: '180', icon: BoxIcon, color: '#E6A23C' },
-  { title: '服务数量', value: '23', percent: 65, total: '35', icon: Connection, color: '#F56C6C' }
-])
+const overviewData = ref(clusterData.overviewData)
 
-const cpuUsageOption = ref({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}<br/>{a0}: {c0}%' },
-  grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-  xAxis: {
-    type: 'category',
-    data: ['Master-1', 'Node-1', 'Node-2', 'Node-3', 'Node-4'],
-    axisLine: { lineStyle: { color: '#e0e0e0' } },
-    axisLabel: { color: '#999' }
-  },
-  yAxis: {
-    type: 'value',
-    max: 100,
-    min: 0,
-    interval: 20,
-    axisLine: { show: false },
-    axisTick: { show: false },
-    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } },
-    axisLabel: { color: '#999' }
-  },
-  series: [{
-    name: 'CPU使用率',
-    type: 'bar',
-    barWidth: '30%',
-    data: [65, 45, 30, 85, 60],
-    itemStyle: {
-      color: (params: { data: number }) => getProgressColor(params.data),
-      borderRadius: [4, 4, 0, 0]
-    },
-    label: { show: true, position: 'top', formatter: '{c}%', color: '#666' }
-  }]
-})
+const cpuUsageOption = ref(clusterData.cpuUsageOption)
 
-const memoryUsageOption = ref({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', axisPointer: { type: 'cross', crossStyle: { color: '#999' } } },
-  legend: { data: ['已用内存', '缓存', '可用内存'], right: 10, top: 10, textStyle: { color: '#666' } },
-  grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-  xAxis: {
-    type: 'category',
-    data: ['Master-1', 'Node-1', 'Node-2', 'Node-3', 'Node-4'],
-    axisLine: { lineStyle: { color: '#e0e0e0' } },
-    axisLabel: { color: '#999' }
-  },
-  yAxis: {
-    type: 'value',
-    name: '内存 (GB)',
-    min: 0,
-    max: 24,
-    interval: 4,
-    axisLine: { lineStyle: { color: '#e0e0e0' } },
-    axisLabel: { color: '#999' },
-    splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } }
-  },
-  series: [
-    { name: '已用内存', type: 'bar', stack: 'total', data: [6, 10, 8, 15, 12], itemStyle: { color: '#F56C6C', borderRadius: [4, 4, 0, 0] }, emphasis: { focus: 'series' } },
-    { name: '缓存', type: 'bar', stack: 'total', data: [3, 4, 2, 5, 3], itemStyle: { color: '#E6A23C', borderRadius: [4, 4, 0, 0] }, emphasis: { focus: 'series' } },
-    { name: '可用内存', type: 'bar', stack: 'total', data: [15, 10, 14, 4, 9], itemStyle: { color: '#67C23A', borderRadius: [4, 4, 0, 0] }, emphasis: { focus: 'series' } }
-  ]
-})
+const memoryUsageOption = ref(clusterData.memoryUsageOption)
 
-const storageUsageOption = ref({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { backgroundColor: '#6a7985' } } },
-  legend: { data: ['已使用', '总量'], right: 10, top: 10, textStyle: { color: '#666' } },
-  grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-  xAxis: [{ type: 'category', boundaryGap: false, data: ['Master-1', 'Node-1', 'Node-2', 'Node-3', 'Node-4'], axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#999' } }],
-  yAxis: [{ type: 'value', name: '存储 (GB)', min: 0, max: 300, interval: 50, axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } } }],
-  series: [
-    { name: '已使用', type: 'line', stack: '总量', areaStyle: { color: '#F56C6C', opacity: 0.8 }, emphasis: { focus: 'series' }, lineStyle: { width: 2, color: '#F56C6C' }, itemStyle: { color: '#F56C6C' }, data: [120, 80, 90, 150, 100] },
-    { name: '总量', type: 'line', stack: '总量', areaStyle: { color: '#E4E7ED', opacity: 0.3 }, emphasis: { focus: 'series' }, lineStyle: { width: 2, color: '#909399' }, itemStyle: { color: '#909399' }, data: [200, 200, 200, 200, 200] }
-  ]
-})
+const storageUsageOption = ref(clusterData.storageUsageOption)
 
-const networkUsageOption = ref({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-  legend: { data: ['入站', '出站'], right: 10, top: 10, textStyle: { color: '#666' } },
-  grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-  xAxis: { type: 'category', data: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'], axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#999' } },
-  yAxis: { type: 'value', name: '网络流量 (Mbps)', axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.05)' } } },
-  series: [
-    { name: '入站', type: 'bar', stack: '流量', barWidth: '40%', data: [120, 200, 150, 180, 210, 190, 230], itemStyle: { color: '#409EFF' } },
-    { name: '出站', type: 'bar', stack: '流量', barWidth: '40%', data: [100, 170, 130, 150, 180, 160, 190], itemStyle: { color: '#67C23A' } }
-  ]
-})
+const networkUsageOption = ref(clusterData.networkUsageOption)
 
-const nodes = ref([
-  { name: 'master-1', role: 'master', status: 'Ready', cpuUsage: 65, memoryUsage: 75, totalPods: 64, runningPods: 60, isNew: false },
-  { name: 'node-1', role: 'worker', status: 'Ready', cpuUsage: 45, memoryUsage: 60, totalPods: 128, runningPods: 110, isNew: true },
-  { name: 'node-2', role: 'worker', status: 'Ready', cpuUsage: 30, memoryUsage: 55, totalPods: 128, runningPods: 98, isNew: false },
-  { name: 'node-3', role: 'worker', status: 'NotReady', cpuUsage: 85, memoryUsage: 90, totalPods: 128, runningPods: 128, isNew: false },
-  { name: 'node-4', role: 'worker', status: 'Ready', cpuUsage: 60, memoryUsage: 65, totalPods: 128, runningPods: 105, isNew: false }
-])
+const nodes = ref(clusterData.nodes)
 
-const recentEvents = ref([
-  { timestamp: '2023-10-15T09:23:17Z', type: 'Warning', object: 'pod/nginx-deployment-75675f5897-58xj7', namespace: 'default', reason: 'FailedScheduling', message: '0/4 nodes available: 3 Insufficient cpu, 1 Insufficient memory.' },
-  { timestamp: '2023-10-15T09:20:45Z', type: 'Normal', object: 'deployment/nginx-deployment', namespace: 'default', reason: 'ScalingReplicaSet', message: 'Scaled up replica set nginx-deployment-75675f5897 to 1' },
-  { timestamp: '2023-10-15T09:18:32Z', type: 'Warning', object: 'node/node-3', namespace: '', reason: 'NodeNotReady', message: 'Node node-3 status is now: NodeNotReady' },
-  { timestamp: '2023-10-15T09:15:12Z', type: 'Normal', object: 'service/redis-master', namespace: 'prod', reason: 'UpdatedLoadBalancer', message: 'Updated load balancer with new hosts' },
-  { timestamp: '2023-10-15T09:12:58Z', type: 'Normal', object: 'pod/mysql-56f4d7f65d-f5z2n', namespace: 'prod', reason: 'Pulled', message: 'Successfully pulled image "mysql:5.7"' },
-  { timestamp: '2023-10-15T09:10:31Z', type: 'Warning', object: 'pod/cron-job-1625868000-abcde', namespace: 'dev', reason: 'Failed', message: 'Job has reached the specified backoff limit' }
-])
+const recentEvents = ref(clusterData.recentEvents)
 
-const eventStatistics = ref([
-  { type: 'Normal', count: 42, percentage: 70, trend: 'up' },
-  { type: 'Warning', count: 18, percentage: 30, trend: 'down' },
-  { type: 'Critical', count: 5, percentage: 10, trend: 'up' },
-  { type: 'Info', count: 10, percentage: 20, trend: 'up' },
-  { type: 'Notice', count: 8, percentage: 15, trend: 'down' },
-  { type: 'Error', count: 3, percentage: 5, trend: 'up' },
-  { type: 'Debug', count: 2, percentage: 5, trend: 'down' },
-  { type: 'Alert', count: 1, percentage: 2, trend: 'up' },
-  { type: 'Emergency', count: 0, percentage: 0, trend: 'down' }
-])
+const eventStatistics = ref(clusterData.eventStatistics)
 
-const eventStatisticsOption = ref({
-  backgroundColor: 'transparent',
-  tooltip: { trigger: 'item' },
-  legend: { top: '5%', left: 'center', textStyle: { color: '#666' } },
-  series: [{
-    name: '事件统计',
-    type: 'pie',
-    radius: ['50%', '70%'],
-    center: ['50%', '60%'],
-    avoidLabelOverlap: false,
-    itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
-    label: { show: false, position: 'center' },
-    emphasis: { label: { show: true, fontSize: '18', fontWeight: 'bold', color: '#333' } },
-    labelLine: { show: false },
-    data: [
-      { value: 42, name: '正常事件 (70%)', itemStyle: { color: '#67C23A' } },
-      { value: 5, name: '严重事件 (10%)', itemStyle: { color: '#F56C6C' } },
-      { value: 10, name: '通知事件 (20%)', itemStyle: { color: '#909399' } },
-      { value: 18, name: '警告事件 (30%)', itemStyle: { color: '#E6A23C' } }
-    ]
-  }]
-})
+const eventStatisticsOption = ref(clusterData.eventStatisticsOption)
 
 const resourceAlerts = ref([
   { name: 'node-3 CPU过载', message: '节点node-3 CPU使用率达85%，超过阈值80%', level: 'critical', levelText: '严重', time: '5分钟前' },
