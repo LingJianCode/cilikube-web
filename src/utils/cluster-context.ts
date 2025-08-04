@@ -13,7 +13,12 @@ export function getCurrentClusterId(): string | null {
   return currentClusterId
 }
 
-/** 从localStorage获取保存的集群名称 */
+/** 从localStorage获取保存的集群ID */
+export function getSavedClusterId(): string | null {
+  return localStorage.getItem('selectedClusterId')
+}
+
+/** 从localStorage获取保存的集群名称（向后兼容） */
 export function getSavedClusterName(): string | null {
   return localStorage.getItem('selectedClusterName')
 }

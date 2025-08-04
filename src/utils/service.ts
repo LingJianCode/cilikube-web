@@ -149,7 +149,8 @@ function createMockRequest(service: AxiosInstance) {
         "Content-Type": "application/json"
       },
       timeout: 5000,
-      baseURL: import.meta.env.VITE_BASE_API, // 统一使用 VITE_BASE_API
+      // 在开发环境使用代理，生产环境使用完整URL
+      baseURL: import.meta.env.DEV ? '' : import.meta.env.VITE_BASE_API,
       data: {}
     }
     const mergeConfig = merge(defaultConfig, config)
@@ -230,7 +231,8 @@ function createGoApiRequest(service: AxiosInstance) {
         "Content-Type": "application/json"
       },
       timeout: 10000, // 为真实后端设置更长的超时时间
-      baseURL: import.meta.env.VITE_BASE_API, // 统一使用 VITE_BASE_API
+      // 在开发环境使用代理，生产环境使用完整URL
+      baseURL: import.meta.env.DEV ? '' : import.meta.env.VITE_BASE_API,
       data: {}
     }
     const mergeConfig = merge(defaultConfig, config)

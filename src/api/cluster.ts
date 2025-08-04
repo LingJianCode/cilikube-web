@@ -1,4 +1,4 @@
-// [重要] 导入我们新的专用请求方法 request (not requestGo)
+// [重要] 导入我们的请求方法 request (Go backend returns {code, data, message} format)
 import { request } from "@/utils/service" 
 
 // ... 接口定义部分保持不变 ...
@@ -24,29 +24,33 @@ export interface CreateClusterRequest {
 
 /** 获取集群列表 */
 export function getClusterList() {
-  // [修复] 使用 request (支持 {code: 200, data: []} 格式)
+  // Go 后端返回 {code: 200, data: [...], message: "..."} 格式
   return request<{ data: ClusterInfo[] }>({
     url: "/api/v1/clusters",
-    method: "get"
+    method: "get",
+    timeout: 10000 // 增加超时时间到10秒
   })
 }
 
 /** 获取当前活动集群名称 */
 export function getActiveCluster() {
-  // [修复] 使用 request (支持 {code: 200, data: string} 格式)
+  // Go 后端返回 {code: 200, data: "cluster-id", message: "..."} 格式
   return request<{ data: string }>({
     url: "/api/v1/clusters/active",
-    method: "get"
+    method: "get",
+    timeout: 10000 // 增加超时时间到10秒
   })
 }
 
 /** 设置活动集群 */
-export function setActiveCluster(name: string) {
-  // [修复] 使用 request
+export function setActiveCluster(idOrName: string) {
+  // 优先使用 ID，向后兼容 name
+  const isId = idOrName.length > 10 && idOrName.includes('-') // 简单的ID检测
   return request({
     url: "/api/v1/clusters/active",
     method: "post",
-    data: { name }
+    data: isId ? { id: idOrName } : { name: idOrName },
+    timeout: 10000 // 增加超时时间到10秒
   })
 }
 
@@ -56,19 +60,20 @@ export function createCluster(data: CreateClusterRequest) {
     ...data,
     kubeconfigData: btoa(data.kubeconfigData)
   }
-  // [修复] 使用 request
   return request({
     url: "/api/v1/clusters",
     method: "post",
-    data: payload
+    data: payload,
+    timeout: 15000 // 创建集群可能需要更长时间
   })
 }
 
 /** 删除集群 */
-export function deleteCluster(clusterName: string) {
-  // [修复] 使用 request
+export function deleteCluster(clusterId: string) {
+  // 现在使用 ID 而不是 name
   return request({
-    url: `/api/v1/clusters/${clusterName}`,
-    method: "delete"
+    url: `/api/v1/clusters/${clusterId}`,
+    method: "delete",
+    timeout: 10000 // 增加超时时间到10秒
   })
 }

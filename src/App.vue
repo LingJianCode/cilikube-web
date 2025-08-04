@@ -2,6 +2,7 @@
 import { h, onMounted } from "vue"
 import { useTheme } from "@/hooks/useTheme"
 import { useClusterStore } from "@/store/modules/clusterStore"
+import { migrateClusterStorage, needsMigration } from "@/utils/cluster-migration"
 import { ElNotification } from "element-plus"
 // 将 Element Plus 的语言设置为中文
 import zhCn from "element-plus/es/locale/lang/zh-cn"
@@ -15,7 +16,21 @@ initTheme()
 /** 初始化集群store */
 onMounted(async () => {
   try {
+    // 首先获取集群列表
     await clusterStore.fetchAvailableClusters()
+    
+    // 检查是否需要迁移旧的集群存储
+    if (needsMigration()) {
+      const migrationSuccess = await migrateClusterStorage()
+      if (migrationSuccess) {
+        ElNotification({
+          title: '存储迁移',
+          message: '已自动迁移您的集群选择设置到新版本',
+          type: 'success',
+          duration: 3000
+        })
+      }
+    }
   } catch (error) {
     console.warn('Failed to initialize cluster store:', error)
   }

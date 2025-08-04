@@ -165,7 +165,6 @@
       return displayConfig.filter(item => summaryData.value?.[item.key] !== undefined && summaryData.value?.[item.key] !== null);
   });
   
-  const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
   const fetchSummary = async () => {
     loading.value = true;
     error.value = null;
@@ -173,7 +172,8 @@
       const response = await request<{ code: number; data: ResourceSummaryData; message: string }>({
         url: '/api/v1/summary/resources',
         method: 'get',
-        baseURL: VITE_API_BASE_URL
+        timeout: 15000 // 增加超时时间，因为需要从K8s集群获取数据
+        // 移除硬编码的baseURL，让它使用service.ts中的配置
       });
       if (response.code === 200 && response.data) {
         summaryData.value = response.data;

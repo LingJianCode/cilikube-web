@@ -48,21 +48,22 @@ const handleClusterCommand = (command: string | number | boolean) => {
       clusterStore.fetchAvailableClusters() // 调用 store 中的 action 刷新
       return
     }
-    // 切换集群
-    const oldClusterName = selectedClusterName.value
-    clusterStore.setSelectedClusterName(command)
+    // 切换集群 - 现在command是clusterId
+    const oldClusterId = clusterStore.selectedClusterId
+    clusterStore.setSelectedClusterId(command)
     // 仅当集群实际发生变化时提示，避免刷新列表时也提示切换
-    if (oldClusterName !== command) {
-        ElMessage.success(`已切换到集群: ${getCurrentClusterDisplayName(command)}`)
+    if (oldClusterId !== command) {
+        const cluster = availableClusters.value.find(c => c.id === command)
+        ElMessage.success(`已切换到集群: ${cluster?.displayName || '未知集群'}`)
     }
   }
 }
 
 // 获取当前选中集群的显示名称
-const getCurrentClusterDisplayName = (name: string | null = selectedClusterName.value): string => {
-  if (!name) return "未选择集群"
-  const cluster = availableClusters.value.find(c => c.name === name)
-  return cluster ? cluster.displayName : name // 如果找不到匹配的，直接返回 name
+const getCurrentClusterDisplayName = (id: string | null = clusterStore.selectedClusterId): string => {
+  if (!id) return "未选择集群"
+  const cluster = availableClusters.value.find(c => c.id === id)
+  return cluster ? cluster.displayName : "未知集群"
 }
 
 // 组件挂载时获取可用集群列表
@@ -111,11 +112,11 @@ onMounted(() => {
             </el-dropdown-item>
             <el-dropdown-item
               v-for="cluster in availableClusters"
-              :key="cluster.name"
-              :command="cluster.name"
-              :disabled="selectedClusterName === cluster.name"
+              :key="cluster.id"
+              :command="cluster.id"
+              :disabled="clusterStore.selectedClusterId === cluster.id"
             >
-              <span :style="{ fontWeight: selectedClusterName === cluster.name ? 'bold' : 'normal' }">
+              <span :style="{ fontWeight: clusterStore.selectedClusterId === cluster.id ? 'bold' : 'normal' }">
                 {{ cluster.displayName }}
                 <span v-if="cluster.name !== cluster.displayName" style="font-size: 0.8em; color: #909399;"> ({{ cluster.name }})</span>
               </span>

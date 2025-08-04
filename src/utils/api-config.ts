@@ -11,7 +11,15 @@ export const API_CONFIG = {
 }
 
 /**
- * 获取当前选中的集群名称
+ * 获取当前选中的集群ID
+ */
+export function getCurrentClusterId(): string | null {
+  const clusterStore = useClusterStore()
+  return clusterStore.selectedClusterId || null
+}
+
+/**
+ * 获取当前选中的集群名称（向后兼容）
  */
 export function getCurrentClusterName(): string | null {
   const clusterStore = useClusterStore()
@@ -28,16 +36,16 @@ export async function kubernetesRequest<T>(config: {
   params?: any
   headers?: any
 }): Promise<T> {
-  const clusterName = getCurrentClusterName()
-  
+  const clusterId = getCurrentClusterId()
+
   // 如果需要集群上下文的API，添加集群参数
-  if (isKubernetesResourceUrl(config.url) && clusterName) {
+  if (isKubernetesResourceUrl(config.url) && clusterId) {
     config.params = {
       ...config.params,
-      cluster: clusterName
+      clusterId: clusterId
     }
   }
-  
+
   return request<T>({
     ...config,
     baseURL: API_CONFIG.BASE_URL,
@@ -63,7 +71,7 @@ function isKubernetesResourceUrl(url: string): boolean {
     /\/apis\/apps\/v1\/deployments/,
     /\/apis\/networking\.k8s\.io\/v1\/ingresses/
   ]
-  
+
   return resourcePatterns.some(pattern => pattern.test(url))
 }
 
@@ -103,7 +111,7 @@ export async function fetchNamespaces(): Promise<string[]> {
       url: '/api/v1/namespaces',
       method: 'get'
     })
-    
+
     if (response.code === 200 && response.data?.items) {
       return response.data.items.map(ns => ns.metadata.name).sort()
     } else {

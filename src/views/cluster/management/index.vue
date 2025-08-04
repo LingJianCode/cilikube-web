@@ -157,7 +157,7 @@ const isAvailable = (status: string) => status.startsWith("可用")
 // 处理操作：设为活动
 const handleSetActive = async (row: ClusterInfo) => {
   try {
-    await setActiveCluster(row.name)
+    await setActiveCluster(row.id) // 使用ID而不是name
     ElMessage.success(`集群 '${row.name}' 已设为活动集群`)
     await fetchAllData() // 成功后重新获取数据以更新状态
   } catch (error) {
@@ -169,7 +169,7 @@ const handleSetActive = async (row: ClusterInfo) => {
 // 处理操作：删除
 const handleDelete = async (row: ClusterInfo) => {
   try {
-    await deleteCluster(row.name)
+    await deleteCluster(row.id) // 使用ID而不是name
     ElMessage.success(`集群 '${row.name}' 已删除`)
     await fetchAllData()
   } catch (error) {
