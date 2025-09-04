@@ -254,7 +254,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: "/link",
     component: Layouts,
     meta: {
-      title: "项目相关",
+      title: "项目管理",
 
       svgIcon: "docs"
     },

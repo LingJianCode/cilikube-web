@@ -22,6 +22,7 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
     base: VITE_PUBLIC_PATH,
     resolve: {
       alias: {
+        
         /** @ 符号指向 src 目录 */
         "@": resolve(__dirname, "./src")
       }

@@ -1,1 +1,30 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# 运行代码检查
+echo "🔍 Running pre-commit checks..."
+
+# 前端代码检查
+cd cilikube-web
+echo "📝 Linting frontend code..."
 npx lint-staged
+
+# 类型检查
+echo "🔧 Running type check..."
+pnpm type-check
+
+# 运行测试
+echo "🧪 Running tests..."
+pnpm test --run
+
+# 后端代码检查
+cd ../cilikube
+echo "📝 Linting backend code..."
+go fmt ./...
+go vet ./...
+
+# 运行后端测试
+echo "🧪 Running backend tests..."
+go test -short ./...
+
+echo "✅ Pre-commit checks passed!"
