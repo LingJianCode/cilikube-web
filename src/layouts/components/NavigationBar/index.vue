@@ -14,6 +14,7 @@ import Notify from "@/components/Notify/index.vue"
 import ThemeSwitch from "@/components/ThemeSwitch/index.vue"
 import Screenfull from "@/components/Screenfull/index.vue"
 import SearchMenu from "@/components/SearchMenu/index.vue"
+import FontSelector from "@/components/FontSelector/index.vue"
 import { useDevice } from "@/hooks/useDevice"
 import { useLayoutMode } from "@/hooks/useLayoutMode"
 import { ElMessage } from 'element-plus' // 导入 ElMessage
@@ -26,7 +27,7 @@ const userStore = useUserStore()
 const settingsStore = useSettingsStore()
 const clusterStore = useClusterStore() // 使用 cluster store
 
-const { showNotify, showThemeSwitch, showScreenfull, showSearchMenu } = storeToRefs(settingsStore)
+const { showNotify, showThemeSwitch, showScreenfull, showSearchMenu, showFontSelector } = storeToRefs(settingsStore)
 const { availableClusters, selectedClusterName, loadingClusters } = storeToRefs(clusterStore) // 从 store 获取集群状态
 
 /** 切换侧边栏 */
@@ -88,6 +89,7 @@ onMounted(() => {
     <div class="right-menu">
       <SearchMenu v-if="showSearchMenu" class="right-menu-item" />
       <Screenfull v-if="showScreenfull" class="right-menu-item" />
+      <FontSelector v-if="showFontSelector" class="right-menu-item" />
       <ThemeSwitch v-if="showThemeSwitch" class="right-menu-item" />
       <Notify v-if="showNotify" class="right-menu-item" />
 

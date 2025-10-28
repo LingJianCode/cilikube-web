@@ -23,6 +23,8 @@ export interface LayoutSettings {
   showScreenfull: boolean
   /** 是否显示搜索按钮 */
   showSearchMenu: boolean
+  /** 是否显示字体选择器 */
+  showFontSelector: boolean
   /** 是否缓存标签栏 */
   cacheTagsView: boolean
   /** 开启系统水印 */
@@ -31,6 +33,8 @@ export interface LayoutSettings {
   showGreyMode: boolean
   /** 是否显示色弱模式 */
   showColorWeakness: boolean
+  /** 全局字体 */
+  fontFamily: string
 }
 
 /** 默认配置 */
@@ -45,10 +49,12 @@ const defaultSettings: LayoutSettings = {
   showThemeSwitch: true,
   showScreenfull: true,
   showSearchMenu: true,
+  showFontSelector: true,
   cacheTagsView: false,
   showWatermark: true,
   showGreyMode: false,
-  showColorWeakness: false
+  showColorWeakness: false,
+  fontFamily: "default"
 }
 
 /** 项目配置 */

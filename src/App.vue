@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { h, onMounted } from "vue"
 import { useTheme } from "@/hooks/useTheme"
+import { useFont } from "@/hooks/useFont"
 import { useClusterStore } from "@/store/modules/clusterStore"
 import { migrateClusterStorage, needsMigration } from "@/utils/cluster-migration"
 import { ElNotification } from "element-plus"
@@ -8,10 +9,14 @@ import { ElNotification } from "element-plus"
 import zhCn from "element-plus/es/locale/lang/zh-cn"
 
 const { initTheme } = useTheme()
+const { initFont } = useFont()
 const clusterStore = useClusterStore()
 
 /** 初始化主题 */
 initTheme()
+
+/** 初始化字体 */
+initFont()
 
 /** 初始化集群store */
 onMounted(async () => {
