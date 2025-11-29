@@ -23,11 +23,8 @@ const { isLeft, isTop, isLeftTop, setLayoutMode } = useLayoutMode()
       </el-container>
     </el-tooltip>
     <el-tooltip content="混合模式">
-      <el-container
-        class="layout-mode left-top"
-        :class="{ active: isLeftTop }"
-        @click="setLayoutMode(LayoutModeEnum.LeftTop)"
-      >
+      <el-container class="layout-mode left-top" :class="{ active: isLeftTop }"
+        @click="setLayoutMode(LayoutModeEnum.LeftTop)">
         <el-header />
         <el-container>
           <el-aside />
@@ -51,6 +48,7 @@ const { isLeft, isTop, isLeftTop, setLayoutMode } = useLayoutMode()
   cursor: pointer;
   border-radius: 6px;
   border: 2px solid transparent;
+
   &:hover {
     border: 2px solid var(--el-color-primary);
   }
@@ -72,9 +70,11 @@ const { isLeft, isTop, isLeftTop, setLayoutMode } = useLayoutMode()
   .el-header {
     background-color: var(--el-fill-color-darker);
   }
+
   .el-aside {
     background-color: var(--el-color-primary);
   }
+
   .el-main {
     background-color: var(--el-fill-color-lighter);
   }
@@ -84,6 +84,7 @@ const { isLeft, isTop, isLeftTop, setLayoutMode } = useLayoutMode()
   .el-header {
     background-color: var(--el-color-primary);
   }
+
   .el-main {
     background-color: var(--el-fill-color-lighter);
   }
@@ -93,9 +94,11 @@ const { isLeft, isTop, isLeftTop, setLayoutMode } = useLayoutMode()
   .el-header {
     background-color: var(--el-fill-color-darker);
   }
+
   .el-aside {
     background-color: var(--el-color-primary);
   }
+
   .el-main {
     background-color: var(--el-fill-color-lighter);
   }

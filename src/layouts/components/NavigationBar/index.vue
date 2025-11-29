@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted } from "vue" // 确保 onMounted 已导入
 import { useRouter } from "vue-router"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { useAppStore } from "@/store/modules/app"
 import { useSettingsStore } from "@/store/modules/settings"
@@ -15,12 +16,14 @@ import ThemeSwitch from "@/components/ThemeSwitch/index.vue"
 import Screenfull from "@/components/Screenfull/index.vue"
 import SearchMenu from "@/components/SearchMenu/index.vue"
 import FontSelector from "@/components/FontSelector/index.vue"
+import LanguageSelector from "@/components/LanguageSelector/index.vue"
 import { useDevice } from "@/hooks/useDevice"
 import { useLayoutMode } from "@/hooks/useLayoutMode"
 import { ElMessage } from 'element-plus' // 导入 ElMessage
 
 const { isMobile } = useDevice()
 const { isTop } = useLayoutMode()
+const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
@@ -45,7 +48,7 @@ const logout = () => {
 const handleClusterCommand = (command: string | number | boolean) => {
   if (typeof command === 'string') {
     if (command === "__REFRESH__") {
-      ElMessage.info("正在刷新集群列表...")
+      ElMessage.info(t('actions.refreshing'))
       clusterStore.fetchAvailableClusters() // 调用 store 中的 action 刷新
       return
     }
@@ -55,16 +58,16 @@ const handleClusterCommand = (command: string | number | boolean) => {
     // 仅当集群实际发生变化时提示，避免刷新列表时也提示切换
     if (oldClusterId !== command) {
         const cluster = availableClusters.value.find(c => c.id === command)
-        ElMessage.success(`已切换到集群: ${cluster?.displayName || '未知集群'}`)
+        ElMessage.success(t('actions.switchedToCluster', { name: cluster?.displayName || t('actions.unknownCluster') }))
     }
   }
 }
 
 // 获取当前选中集群的显示名称
 const getCurrentClusterDisplayName = (id: string | null = clusterStore.selectedClusterId): string => {
-  if (!id) return "未选择集群"
+  if (!id) return t('actions.noClusterSelected')
   const cluster = availableClusters.value.find(c => c.id === id)
-  return cluster ? cluster.displayName : "未知集群"
+  return cluster ? cluster.displayName : t('actions.unknownCluster')
 }
 
 // 组件挂载时获取可用集群列表
@@ -89,6 +92,7 @@ onMounted(() => {
     <div class="right-menu">
       <SearchMenu v-if="showSearchMenu" class="right-menu-item" />
       <Screenfull v-if="showScreenfull" class="right-menu-item" />
+      <LanguageSelector class="right-menu-item" />
       <FontSelector v-if="showFontSelector" class="right-menu-item" />
       <ThemeSwitch v-if="showThemeSwitch" class="right-menu-item" />
       <Notify v-if="showNotify" class="right-menu-item" />
@@ -104,13 +108,13 @@ onMounted(() => {
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item v-if="loadingClusters" disabled>
-              <el-icon class="is-loading" style="vertical-align: middle; margin-right: 5px;"><Loading /></el-icon>加载中...
+              <el-icon class="is-loading" style="vertical-align: middle; margin-right: 5px;"><Loading /></el-icon>{{ t('actions.loading') }}
             </el-dropdown-item>
             <el-dropdown-item
               v-else-if="!loadingClusters && availableClusters.length === 0"
               disabled
             >
-              无可用集群
+              {{ t('actions.noClustersAvailable') }}
             </el-dropdown-item>
             <el-dropdown-item
               v-for="cluster in availableClusters"
@@ -124,7 +128,7 @@ onMounted(() => {
               </span>
             </el-dropdown-item>
             <el-dropdown-item command="__REFRESH__" divided :icon="Refresh">
-              刷新列表
+              {{ t('actions.refresh') }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -137,7 +141,7 @@ onMounted(() => {
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item divided @click="logout">
-              <span style="display: block">退出登录</span>
+              <span style="display: block">{{ t('actions.logout') }}</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>

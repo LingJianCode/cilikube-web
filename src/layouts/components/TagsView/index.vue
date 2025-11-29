@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { getCurrentInstance, onMounted, ref, watch } from "vue"
 import { type RouteLocationNormalizedLoaded, type RouteRecordRaw, RouterLink, useRoute, useRouter } from "vue-router"
+import { useI18n } from "vue-i18n"
 import { type TagView, useTagsViewStore } from "@/store/modules/tags-view"
 import { usePermissionStore } from "@/store/modules/permission"
 import { useRouteListener } from "@/hooks/useRouteListener"
@@ -11,9 +12,48 @@ import { Close } from "@element-plus/icons-vue"
 const instance = getCurrentInstance()
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
 const tagsViewStore = useTagsViewStore()
 const permissionStore = usePermissionStore()
 const { listenerRouteChange } = useRouteListener()
+
+// 标题映射表，将中文标题映射到国际化key
+const titleMap: Record<string, string> = {
+  '看板': 'menu.board',
+  '集群安装': 'menu.clusterInstall',
+  '集群概览': 'menu.clusterOverview',
+  '集群监控': 'menu.clusterMonitor',
+  '运维导航': 'menu.opsNavigation',
+  '集群': 'menu.cluster',
+  '集群管理': 'menu.clusterManagement',
+  '节点': 'menu.node',
+  '命名空间': 'menu.namespace',
+  '工作负载': 'menu.workloads',
+  'pod': 'menu.pod',
+  'deployment': 'menu.deployment',
+  '存储': 'menu.storage',
+  'pv': 'menu.pv',
+  'pvc': 'menu.pvc',
+  '网络': 'menu.network',
+  'service': 'menu.service',
+  'ingress': 'menu.ingress',
+  '配置管理': 'menu.config',
+  'configmap': 'menu.configmap',
+  'secret': 'menu.secret',
+  '项目管理': 'menu.project',
+  '中文文档': 'menu.chineseDocs',
+  '我的博客': 'menu.myBlog',
+  '技术栈': 'menu.techStack',
+  '权限': 'menu.permission',
+  '页面级': 'menu.pageLevel',
+  '按钮级': 'menu.buttonLevel'
+}
+
+// 获取国际化标题
+const getI18nTitle = (title: string) => {
+  const i18nKey = titleMap[title]
+  return i18nKey ? t(i18nKey) : title
+}
 
 /** 标签页组件元素的引用数组 */
 const tagRefs = ref<InstanceType<typeof RouterLink>[]>([])
@@ -175,17 +215,17 @@ onMounted(() => {
         @click.middle="!isAffix(tag) && closeSelectedTag(tag)"
         @contextmenu.prevent="openMenu(tag, $event)"
       >
-        {{ tag.meta?.title }}
+        {{ getI18nTitle(tag.meta?.title || '') }}
         <el-icon v-if="!isAffix(tag)" :size="12" @click.prevent.stop="closeSelectedTag(tag)">
           <Close />
         </el-icon>
       </router-link>
     </ScrollPane>
     <ul v-show="visible" class="contextmenu" :style="{ left: left + 'px', top: top + 'px' }">
-      <li @click="refreshSelectedTag(selectedTag)">刷新</li>
-      <li v-if="!isAffix(selectedTag)" @click="closeSelectedTag(selectedTag)">关闭</li>
-      <li @click="closeOthersTags">关闭其它</li>
-      <li @click="closeAllTags(selectedTag)">关闭所有</li>
+      <li @click="refreshSelectedTag(selectedTag)">{{ t('tagsView.refresh') }}</li>
+      <li v-if="!isAffix(selectedTag)" @click="closeSelectedTag(selectedTag)">{{ t('tagsView.close') }}</li>
+      <li @click="closeOthersTags">{{ t('tagsView.closeOthers') }}</li>
+      <li @click="closeAllTags(selectedTag)">{{ t('tagsView.closeAll') }}</li>
     </ul>
   </div>
 </template>

@@ -58,3 +58,15 @@ export const setCachedViews = (views: string[]) => {
   localStorage.setItem(CacheKey.CACHED_VIEWS, JSON.stringify(views))
 }
 //#endregion
+
+//#region 语言设置
+export const getLanguage = () => {
+  return localStorage.getItem(CacheKey.LANGUAGE) as 'en' | 'zh' | null
+}
+export const setLanguage = (language: 'en' | 'zh') => {
+  localStorage.setItem(CacheKey.LANGUAGE, language)
+}
+export const removeLanguage = () => {
+  localStorage.removeItem(CacheKey.LANGUAGE)
+}
+//#endregion

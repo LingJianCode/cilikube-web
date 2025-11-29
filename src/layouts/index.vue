@@ -52,8 +52,13 @@ watchEffect(() => {
     <TopMode v-else-if="isTop" />
     <!-- 混合模式 -->
     <LeftTopMode v-else-if="isLeftTop" />
-    <!-- 右侧设置面板 -->
-    <RightPanel v-if="showSettings">
+    <!-- 调试信息显示在页面上 -->
+    <!-- <div style="position: fixed; top: 10px; left: 10px; background: yellow; padding: 10px; z-index: 10000;"> -->
+      <!-- 调试：showSettings = {{ showSettings }} -->
+    <!-- </div> -->
+    
+    <!-- 右侧设置面板 - 调试版本 -->
+    <RightPanel v-if="true">
       <Settings />
     </RightPanel>
   </div>

@@ -34,12 +34,28 @@ const show = ref(false)
   top: v-bind(buttonTopCss);
   right: 0;
   border-radius: 6px 0 0 6px;
-  z-index: 10;
+  z-index: 1000; /* 提高 z-index 确保按钮在最上层 */
   cursor: pointer;
   pointer-events: auto;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* 添加阴影增加可见性 */
+  transition: all 0.3s ease; /* 添加过渡动画 */
+
+  /* 悬停效果 */
+  &:hover {
+    background-color: var(--el-color-primary-light-3);
+    transform: translateX(-2px); /* 悬停时稍微向左移动 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  /* 确保图标居中 */
+  .el-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 </style>
