@@ -10,6 +10,13 @@ const Layouts = () => import("@/layouts/index.vue")
  */
 export const constantRoutes: RouteRecordRaw[] = [
   {
+    path: "/",
+    redirect: "/board/summary",
+    meta: {
+      hidden: true
+    }
+  },
+  {
     path: "/redirect",
     component: Layouts,
     meta: {
@@ -46,14 +53,22 @@ export const constantRoutes: RouteRecordRaw[] = [
     name: "Login"
   },
   {
-    path: "/",
-    component: Layouts,
-    redirect: "/board/dashboard",
-    name: "Home",
+    path: "/oauth/callback/:provider?",
+    component: () => import("@/views/login/oauth-callback.vue"),
     meta: {
       hidden: true
-    }
+    },
+    name: "OAuthCallback"
   },
+  {
+    path: "/profile",
+    component: () => import("@/views/profile/index.vue"),
+    meta: {
+      hidden: true
+    },
+    name: "Profile"
+  },
+
   {
     path: "/navi",
     component: () => import("@/views/navi/index.vue"),
@@ -65,36 +80,28 @@ export const constantRoutes: RouteRecordRaw[] = [
   {
     path: "/board",
     component: Layouts,
-    redirect: "/board/dashboard",
+    redirect: "/board/summary",
     meta: {
       title: "看板",
       svgIcon: "dashboard"
     },
     children: [
       {
-        path: "minikube",
-        component: () => import("@/views/minikube/index.vue"),
-        name: "minikube",
-        meta: {
-          title: "集群安装"
-        }
-      },
-      {
         path: "summary",
         component: () => import("@/views/cluster/index.vue"),
         name: "Summary",
         meta: {
           title: "集群概览",
-          affix: true
+          affix: false
         }
       },
+
       {
-        path: "dashboard",
-        component: () => import("@/views/dashboard/index.vue"),
-        name: "Dashboard",
+        path: "minikube",
+        component: () => import("@/views/minikube/index.vue"),
+        name: "minikube",
         meta: {
-          title: "集群监控",
-          affix: true
+          title: "集群安装"
         }
       },
       {
@@ -107,149 +114,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       }
     ]
   },
-  {
-    path: "/cluster",
-    component: Layouts,
-    meta: {
-      title: "集群",
-      svgIcon: "cluster"
-    },
-    children: [
-      {
-      path: "management", // 路径设为 management
-      component: () => import("@/views/cluster/management/index.vue"),
-      name: "ClusterManagement",
-      meta: {
-        title: "集群管理" // 菜单标题
-      }
-    },
-      {
-        path: "node",
-        component: () => import("@/views/node/index.vue"),
-        name: "Node",
-        meta: {
-          title: "节点"
-        }
-      },
-      {
-        path: "namespace",
-        component: () => import("@/views/namespace/index.vue"),
-        name: "Namespace",
-        meta: {
-          title: "命名空间"
-        }
-      }
-    ]
-  },
 
-  {
-    path: "/workloads",
-    component: Layouts,
-    redirect: "/unocss/index",
-    meta: {
-      title: "工作负载",
-      svgIcon: "kubernetes"
-    },
-    children: [
-      {
-        path: "pods",
-        component: () => import("@/views/pods/index.vue"),
-        name: "pods",
-        meta: {
-          title: "pod"
-        }
-      },
-      {
-        path: "deployments",
-        component: () => import("@/views/deployments/index.vue"),
-        name: "deployments",
-        meta: {
-          title: "deployment"
-        }
-      }
-    ]
-  },
-  {
-    path: "/storage",
-    component: Layouts,
-    meta: {
-      title: "存储",
-      svgIcon: "storage"
-    },
-    children: [
-      {
-        path: "persistentvolume",
-        component: () => import("@/views/persistentvolume/index.vue"),
-        name: "Notice",
-        meta: {
-          title: "pv"
-        }
-      },
-      {
-        path: "persistentvolumeclaim",
-        component: () => import("@/views/persistentvolumeclaim/index.vue"),
-        name: "persistentvolume",
-        meta: {
-          title: "pvc"
-        }
-      }
-    ]
-  },
-  {
-    path: "/network",
-    component: Layouts,
-    meta: {
-      title: "网络",
-      svgIcon: "network"
-    },
-    children: [
-      {
-        path: "service",
-        component: () => import("@/views/service/index.vue"),
-        name: "service",
-        meta: {
-          title: "service"
-        }
-      },
-      {
-        path: "ingress",
-        component: () => import("@/views/ingress/index.vue"),
-        name: "Nav",
-        meta: {
-          title: "ingress"
-        }
-      }
-    ]
-  },
-  {
-    path: "/config",
-    component: Layouts,
-    name: "Table",
-    meta: {
-      title: "配置管理",
-      svgIcon: "config"
-    },
-    children: [
-      {
-        path: "configmap",
-        component: () => import("@/views/configmap/index.vue"),
-        name: "ElementPlus",
-        meta: {
-          title: "configmap",
-          keepAlive: true
-        }
-      },
-      {
-        path: "secret",
-        component: () => import("@/views/secret/index.vue"),
-        name: "secret",
-        meta: {
-          title: "secret",
-          keepAlive: true
-        }
-      }
-    ]
-  },
   {
     path: "/link",
     component: Layouts,
@@ -261,7 +126,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     children: [
       {
         path: "https://cilikube.cillian.website",
-        component: () => {},
+        component: () => { },
         name: "Link1",
         meta: {
           title: "中文文档"
@@ -269,7 +134,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       },
       {
         path: "https://www.cillian.website",
-        component: () => {},
+        component: () => { },
         name: "Link2",
         meta: {
           title: "我的博客"
@@ -285,37 +150,7 @@ export const constantRoutes: RouteRecordRaw[] = [
       }
     ]
   },
-  {
-    path: "/permission",
-    component: Layouts,
-    redirect: "/permission/page",
-    name: "Permission",
-    meta: {
-      title: "权限",
-      svgIcon: "lock",
-      roles: ["admin", "editor"], // 可以在根路由中设置角色
-      alwaysShow: true // 将始终显示根菜单
-    },
-    children: [
-      {
-        path: "page",
-        component: () => import("@/views/permission/page.vue"),
-        name: "PagePermission",
-        meta: {
-          title: "页面级",
-          roles: ["admin"] // 或者在子导航中设置角色
-        }
-      },
-      {
-        path: "directive",
-        component: () => import("@/views/permission/directive.vue"),
-        name: "DirectivePermission",
-        meta: {
-          title: "按钮级" // 如果未设置角色，则表示：该页面不需要权限，但会继承根路由的角色
-        }
-      }
-    ]
-  }
+
   // {
   //   path: "/table",
   //   component: Layouts,
@@ -469,7 +304,262 @@ export const constantRoutes: RouteRecordRaw[] = [
  * 用来放置有权限 (Roles 属性) 的路由
  * 必须带有 Name 属性
  */
-export const dynamicRoutes: RouteRecordRaw[] = []
+export const dynamicRoutes: RouteRecordRaw[] = [
+  // Kubernetes 集群管理路由
+  {
+    path: "/cluster",
+    component: Layouts,
+    meta: {
+      title: "集群",
+      svgIcon: "cluster",
+      roles: ["admin", "editor", "viewer"] // 所有角色都可以访问集群信息
+    },
+    children: [
+      {
+        path: "management",
+        component: () => import("@/views/cluster/management/index.vue"),
+        name: "ClusterManagement",
+        meta: {
+          title: "集群管理",
+          roles: ["admin"] // 只有管理员可以管理集群
+        }
+      },
+      {
+        path: "node",
+        component: () => import("@/views/node/index.vue"),
+        name: "Node",
+        meta: {
+          title: "节点",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看节点
+        }
+      },
+      {
+        path: "namespace",
+        component: () => import("@/views/namespace/index.vue"),
+        name: "Namespace",
+        meta: {
+          title: "命名空间",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看命名空间
+        }
+      },
+      {
+        path: "events",
+        component: () => import("@/views/events/index.vue"),
+        name: "ClusterEvents",
+        meta: {
+          title: "集群事件",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看事件
+        }
+      },
+      {
+        path: "crd",
+        component: () => import("@/views/crd/index.vue"),
+        name: "CRD",
+        meta: {
+          title: "自定义资源",
+          roles: ["admin", "editor"] // 管理员和编辑者可以查看CRD
+        }
+      }
+    ]
+  },
+  // Kubernetes 工作负载路由
+  {
+    path: "/workloads",
+    component: Layouts,
+    meta: {
+      title: "工作负载",
+      svgIcon: "kubernetes",
+      roles: ["admin", "editor", "viewer"] // 所有角色都可以访问工作负载
+    },
+    children: [
+      {
+        path: "pods",
+        component: () => import("@/views/pods/index.vue"),
+        name: "Pods",
+        meta: {
+          title: "Pod",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看Pod
+        }
+      },
+      {
+        path: "deployments",
+        component: () => import("@/views/deployments/index.vue"),
+        name: "Deployments",
+        meta: {
+          title: "Deployment",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看Deployment
+        }
+      }
+    ]
+  },
+  // Kubernetes 存储路由
+  {
+    path: "/storage",
+    component: Layouts,
+    meta: {
+      title: "存储",
+      svgIcon: "storage",
+      roles: ["admin", "editor", "viewer"] // 所有角色都可以访问存储
+    },
+    children: [
+      {
+        path: "persistentvolume",
+        component: () => import("@/views/persistentvolume/index.vue"),
+        name: "PersistentVolume",
+        meta: {
+          title: "PV",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看PV
+        }
+      },
+      {
+        path: "persistentvolumeclaim",
+        component: () => import("@/views/persistentvolumeclaim/index.vue"),
+        name: "PersistentVolumeClaim",
+        meta: {
+          title: "PVC",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看PVC
+        }
+      }
+    ]
+  },
+  // Kubernetes 网络路由
+  {
+    path: "/network",
+    component: Layouts,
+    meta: {
+      title: "网络",
+      svgIcon: "network",
+      roles: ["admin", "editor", "viewer"] // 所有角色都可以访问网络
+    },
+    children: [
+      {
+        path: "service",
+        component: () => import("@/views/service/index.vue"),
+        name: "Service",
+        meta: {
+          title: "Service",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看Service
+        }
+      },
+      {
+        path: "ingress",
+        component: () => import("@/views/ingress/index.vue"),
+        name: "Ingress",
+        meta: {
+          title: "Ingress",
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看Ingress
+        }
+      }
+    ]
+  },
+  // Kubernetes 配置管理路由
+  {
+    path: "/config",
+    component: Layouts,
+    meta: {
+      title: "配置管理",
+      svgIcon: "config",
+      roles: ["admin", "editor", "viewer"] // 所有角色都可以访问配置
+    },
+    children: [
+      {
+        path: "configmap",
+        component: () => import("@/views/configmap/index.vue"),
+        name: "ConfigMap",
+        meta: {
+          title: "ConfigMap",
+          keepAlive: true,
+          roles: ["admin", "editor", "viewer"] // 所有角色都可以查看ConfigMap
+        }
+      },
+      {
+        path: "secret",
+        component: () => import("@/views/secret/index.vue"),
+        name: "Secret",
+        meta: {
+          title: "Secret",
+          keepAlive: true,
+          roles: ["admin", "editor"] // 管理员和编辑者可以查看Secret（包含敏感信息）
+        }
+      }
+    ]
+  },
+  // 权限演示路由 - 管理员和编辑者可访问
+  {
+    path: "/permission",
+    component: Layouts,
+    redirect: "/permission/page",
+    name: "Permission",
+    meta: {
+      title: "权限演示",
+      svgIcon: "lock",
+      roles: ["admin", "editor"],
+      alwaysShow: true
+    },
+    children: [
+      {
+        path: "page",
+        component: () => import("@/views/permission/page.vue"),
+        name: "PagePermission",
+        meta: {
+          title: "页面级权限",
+          roles: ["admin"]
+        }
+      },
+      {
+        path: "directive",
+        component: () => import("@/views/permission/directive.vue"),
+        name: "DirectivePermission",
+        meta: {
+          title: "按钮级权限",
+          roles: ["admin", "editor"]
+        }
+      }
+    ]
+  },
+  // 系统管理路由 - 仅管理员可访问
+  {
+    path: "/admin",
+    component: Layouts,
+    redirect: "/admin/user-management",
+    name: "Admin",
+    meta: {
+      title: "系统管理",
+      svgIcon: "lock",
+      roles: ["admin"],
+      alwaysShow: true
+    },
+    children: [
+      {
+        path: "user-management",
+        component: () => import("@/views/admin/user-management/index.vue"),
+        name: "UserManagement",
+        meta: {
+          title: "用户管理",
+          roles: ["admin"]
+        }
+      },
+      {
+        path: "role-management",
+        component: () => import("@/views/admin/role-management/index.vue"),
+        name: "RoleManagement",
+        meta: {
+          title: "角色管理",
+          roles: ["admin"]
+        }
+      },
+      {
+        path: "system-settings",
+        component: () => import("@/views/admin/system-settings/index.vue"),
+        name: "SystemSettings",
+        meta: {
+          title: "系统设置",
+          roles: ["admin"]
+        }
+      }
+    ]
+  }
+]
 
 const router = createRouter({
   history,

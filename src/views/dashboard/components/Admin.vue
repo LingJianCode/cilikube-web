@@ -14,39 +14,22 @@
       <h2>Kubernetes集群监控仪表盘</h2>
       <div class="header-controls">
         <div class="time-range-selector">
-          <el-date-picker
-            v-model="timeRange"
-            type="datetimerange"
-            range-separator="至"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
-            :shortcuts="timeShortcuts"
-            @change="handleTimeRangeChange"
-          />
+          <el-date-picker v-model="timeRange" type="datetimerange" range-separator="至" start-placeholder="开始时间"
+            end-placeholder="结束时间" :shortcuts="timeShortcuts" @change="handleTimeRangeChange" />
         </div>
         <div class="control-group">
-          <el-select
-            v-model="selectedNamespace"
-            placeholder="全部命名空间"
-            size="small"
-            clearable
-            class="namespace-select"
-          >
+          <el-select v-model="selectedNamespace" placeholder="全部命名空间" size="small" clearable class="namespace-select">
             <el-option v-for="ns in namespaces" :key="ns" :label="ns" :value="ns" />
           </el-select>
-          <el-button
-            type="primary"
-            size="small"
-            :icon="RefreshIcon"
-            @click="refreshData"
-            :loading="refreshing"
-            class="refresh-btn"
-          >
+          <el-button type="primary" size="small" :icon="RefreshIcon" @click="refreshData" :loading="refreshing"
+            class="refresh-btn">
             刷新数据
           </el-button>
           <el-tooltip content="最后更新时间">
             <div class="last-update">
-              <el-icon><Clock /></el-icon>
+              <el-icon>
+                <ClockIcon />
+              </el-icon>
               <span>{{ lastUpdateTime }}</span>
             </div>
           </el-tooltip>
@@ -54,10 +37,10 @@
       </div>
     </div>
 
-    <!-- 资源概览卡片 --> 
+    <!-- 资源概览卡片 -->
     <ResourceSummaryCard />
 
-    
+
     <!-- 健康状况指示灯 -->
     <div class="health-indicator">
       <div class="indicator-item" v-for="(item, index) in healthStatus" :key="index">
@@ -70,7 +53,7 @@
     </div>
 
 
-     
+
 
     <!-- 告警统计卡片 -->
     <div class="alert-summary-card">
@@ -81,8 +64,12 @@
         <div class="alert-label">
           {{ item.label }}
           <el-tag :type="item.trend > 0 ? 'danger' : 'success'" size="small">
-            <el-icon v-if="item.trend > 0"><Top /></el-icon>
-            <el-icon v-else><Bottom /></el-icon>
+            <el-icon v-if="item.trend > 0">
+              <Top />
+            </el-icon>
+            <el-icon v-else>
+              <Bottom />
+            </el-icon>
             {{ Math.abs(item.trend) }}%
           </el-tag>
         </div>
@@ -95,7 +82,6 @@
     <div class="dashboard-card">
       <div class="card-header">
         <div class="card-title">
-          <el-icon><DataAnalysis /></el-icon>
           <span>集群概览</span>
         </div>
       </div>
@@ -109,12 +95,7 @@
               <div class="card-content">
                 <div class="card-title">{{ item.title }}</div>
                 <div class="card-value">{{ item.value }}</div>
-                <el-progress
-                  :percentage="item.percent"
-                  :color="item.color"
-                  :stroke-width="8"
-                  :show-text="false"
-                />
+                <el-progress :percentage="item.percent" :color="item.color" :stroke-width="8" :show-text="false" />
                 <div class="card-description">
                   <span>总{{ item.total || 'N/A' }}</span>
                   <span class="usage">使用率 {{ item.percent }}%</span>
@@ -130,7 +111,6 @@
     <div class="dashboard-card">
       <div class="card-header">
         <div class="card-title">
-          <el-icon><LoadingIcon /></el-icon>
           <span>资源使用率</span>
         </div>
       </div>
@@ -140,7 +120,8 @@
             <div class="chart-container">
               <div class="chart-title">CPU使用情况</div>
               <div class="chart-wrapper">
-                <v-chart :option="cpuUsageOption" autoresize />
+                <v-chart :option="cpuUsageOption" autoresize :init-options="{ renderer: 'canvas' }"
+                  @error="handleChartError" />
               </div>
             </div>
           </el-col>
@@ -148,7 +129,8 @@
             <div class="chart-container">
               <div class="chart-title">内存使用情况</div>
               <div class="chart-wrapper">
-                <v-chart :option="memoryUsageOption" autoresize />
+                <v-chart :option="memoryUsageOption" autoresize :init-options="{ renderer: 'canvas' }"
+                  @error="handleChartError" />
               </div>
             </div>
           </el-col>
@@ -156,7 +138,8 @@
             <div class="chart-container">
               <div class="chart-title">存储使用情况</div>
               <div class="chart-wrapper">
-                <v-chart :option="storageUsageOption" autoresize />
+                <v-chart :option="storageUsageOption" autoresize :init-options="{ renderer: 'canvas' }"
+                  @error="handleChartError" />
               </div>
             </div>
           </el-col>
@@ -176,21 +159,16 @@
     <div class="dashboard-card">
       <div class="card-header">
         <div class="card-title">
-          <el-icon><Loading /></el-icon>
+          <el-icon>
+            <Loading />
+          </el-icon>
           <span>节点状态</span>
         </div>
       </div>
       <div class="card-body">
-        <el-table
-          :data="nodes"
-          stripe
-          border
-          style="width: 100%"
-          v-loading="loadingNodes"
-          :header-cell-style="{ background: '#f5f7fa', color: '#666' }"
-          highlight-current-row
-          @row-click="handleNodeClick"
-        >
+        <el-table :data="nodes" stripe border style="width: 100%" v-loading="loadingNodes"
+          :header-cell-style="{ background: '#f5f7fa', color: '#666' }" highlight-current-row
+          @row-click="handleNodeClick">
           <el-table-column prop="name" label="节点名称" width="180" sortable>
             <template #default="{ row }">
               <div class="node-name">
@@ -208,7 +186,9 @@
           <el-table-column prop="role" label="角色" width="120" sortable>
             <template #default="{ row }">
               <el-tag :type="row.role === 'master' ? 'info' : 'warning'" effect="light" size="small">
-                <el-icon v-if="row.role === 'master'"><DataBoard /></el-icon>
+                <el-icon v-if="row.role === 'master'">
+                  <DataBoard />
+                </el-icon>
                 {{ row.role === 'master' ? '控制节点' : '工作节点' }}
               </el-tag>
             </template>
@@ -223,12 +203,8 @@
           <el-table-column prop="cpuUsage" label="CPU使用率" sortable>
             <template #default="{ row }">
               <div class="progress-container">
-                <el-progress
-                  :percentage="row.cpuUsage"
-                  :stroke-width="16"
-                  :color="getProgressColor(row.cpuUsage)"
-                  :show-text="false"
-                />
+                <el-progress :percentage="row.cpuUsage" :stroke-width="16" :color="getProgressColor(row.cpuUsage)"
+                  :show-text="false" />
                 <span class="progress-text">{{ row.cpuUsage }}%</span>
               </div>
             </template>
@@ -236,12 +212,8 @@
           <el-table-column prop="memoryUsage" label="内存使用率" sortable>
             <template #default="{ row }">
               <div class="progress-container">
-                <el-progress
-                  :percentage="row.memoryUsage"
-                  :stroke-width="16"
-                  :color="getProgressColor(row.memoryUsage)"
-                  :show-text="false"
-                />
+                <el-progress :percentage="row.memoryUsage" :stroke-width="16" :color="getProgressColor(row.memoryUsage)"
+                  :show-text="false" />
                 <span class="progress-text">{{ row.memoryUsage }}%</span>
               </div>
             </template>
@@ -268,19 +240,13 @@
     <div class="dashboard-card">
       <div class="card-header">
         <div class="card-title">
-          <el-icon><Document /></el-icon>
           <span>集群事件</span>
         </div>
       </div>
       <div class="card-body">
         <el-tabs v-model="activeEventTab" class="event-tabs">
           <el-tab-pane label="最新事件" name="recent">
-            <el-table
-              :data="recentEvents"
-              style="width: 100%"
-              height="300"
-              v-loading="loadingEvents"
-            >
+            <el-table :data="recentEvents" style="width: 100%" height="300" v-loading="loadingEvents">
               <el-table-column prop="timestamp" label="时间" width="160" sortable>
                 <template #default="{ row }">
                   {{ formatDate(row.timestamp) }}
@@ -305,12 +271,7 @@
                 <v-chart :option="eventStatisticsOption" autoresize />
               </div>
               <div class="statistics-table">
-                <el-table
-                  :data="eventStatistics"
-                  border
-                  style="width: 100%"
-                  height="280"
-                >
+                <el-table :data="eventStatistics" border style="width: 100%" height="280">
                   <el-table-column prop="type" label="事件类型" width="120" />
                   <el-table-column prop="count" label="数量" width="80" />
                   <el-table-column prop="percentage" label="百分比">
@@ -323,11 +284,8 @@
                   </el-table-column>
                   <el-table-column prop="trend" label="趋势">
                     <template #default="{ row }">
-                      <el-tag
-                        :type="row.trend === 'up' ? 'danger' : 'success'"
-                        size="small"
-                        :icon="row.trend === 'up' ? ArrowUpBoldIcon : ArrowDownBoldIcon"
-                      >
+                      <el-tag :type="row.trend === 'up' ? 'danger' : 'success'" size="small"
+                        :icon="row.trend === 'up' ? ArrowUpBoldIcon : ArrowDownBoldIcon">
                         {{ row.trend === 'up' ? '上升' : '下降' }}
                       </el-tag>
                     </template>
@@ -344,7 +302,9 @@
     <div class="dashboard-card">
       <div class="card-header">
         <div class="card-title">
-          <el-icon><Warning /></el-icon>
+          <el-icon>
+            <Warning />
+          </el-icon>
           <span>资源水位警报</span>
         </div>
       </div>
@@ -368,7 +328,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated, onDeactivated } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart, BarChart, LineChart } from 'echarts/charts'
@@ -544,9 +504,25 @@ const handleNodeClick = (row: any) => {
   console.log('点击节点:', row)
 }
 
+// ECharts错误处理
+const handleChartError = (error: any) => {
+  console.warn('ECharts渲染错误:', error)
+  // 静默处理错误，避免影响用户体验
+}
+
 // 组件挂载时加载数据
 onMounted(() => {
   refreshData()
+})
+
+// 组件激活时刷新数据（用于keep-alive缓存的组件）
+onActivated(() => {
+  refreshData()
+})
+
+// 组件失活时清理资源（用于keep-alive缓存的组件）
+onDeactivated(() => {
+  // 清理可能的定时器或异步操作
 })
 </script>
 
@@ -603,9 +579,11 @@ onMounted(() => {
 
         .refresh-btn {
           transition: all 0.3s;
+
           .el-icon {
             transition: transform 0.3s ease;
           }
+
           &:hover .el-icon {
             transform: rotate(360deg);
           }
@@ -621,6 +599,7 @@ onMounted(() => {
           background: #f8f9fa;
           border-radius: 4px;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
           .el-icon {
             font-size: 16px;
           }
@@ -784,6 +763,51 @@ onMounted(() => {
       margin-right: 16px;
       flex-shrink: 0;
       font-size: 24px;
+      background: none !important;
+      position: relative;
+
+      /* 隐藏原来的图标组件 */
+      :deep(.el-icon) {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+      }
+
+      /* 状态指示灯 */
+      &::before {
+        content: '';
+        display: block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+      }
+
+      /* 根据颜色显示不同的指示灯颜色 */
+      &[style*="rgb(64, 158, 255)"]::before {
+        /* 蓝色 - 对应 #409EFF */
+        background: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+      }
+
+      &[style*="rgb(103, 194, 58)"]::before {
+        /* 绿色 - 对应 #67C23A */
+        background: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+      }
+
+      &[style*="rgb(230, 162, 60)"]::before {
+        /* 橙色 - 对应 #E6A23C */
+        background: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+      }
+
+      &[style*="rgb(245, 108, 108)"]::before {
+        /* 红色 - 对应 #F56C6C */
+        background: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+      }
     }
 
     .card-content {
@@ -1010,6 +1034,7 @@ onMounted(() => {
 
       .el-progress {
         flex: 1;
+
         .el-progress-bar__outer {
           background: #e9ecef;
           border-radius: 4px;
@@ -1043,6 +1068,7 @@ onMounted(() => {
   @media (max-width: 768px) {
     .dashboard-header .header-controls {
       flex-direction: column;
+
       .time-range-selector,
       .control-group {
         width: 100%;
@@ -1052,6 +1078,7 @@ onMounted(() => {
     .health-indicator,
     .alert-summary-card {
       flex-direction: column;
+
       .indicator-item,
       .alert-item {
         width: 100%;
@@ -1059,16 +1086,18 @@ onMounted(() => {
     }
 
     .dashboard-container {
-  padding: 20px;
-}
-/* Add spacing if needed */
-.el-row {
-    margin-bottom: 20px;
-}
+      padding: 20px;
+    }
+
+    /* Add spacing if needed */
+    .el-row {
+      margin-bottom: 20px;
+    }
 
 
     .event-statistics-container {
       flex-direction: column;
+
       .statistics-table {
         width: 100%;
       }

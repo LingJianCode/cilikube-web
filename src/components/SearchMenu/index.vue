@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 import { ref } from "vue"
+import { useI18n } from "vue-i18n"
 import SearchModal from "./SearchModal.vue"
+
+const { t } = useI18n()
 
 /** 控制 modal 显隐 */
 const modalVisible = ref<boolean>(false)
@@ -12,7 +15,7 @@ const handleOpen = () => {
 
 <template>
   <div>
-    <el-tooltip effect="dark" content="搜索菜单" placement="bottom">
+    <el-tooltip effect="dark" :content="t('ui.searchMenu')" placement="bottom">
       <SvgIcon name="search" @click="handleOpen" />
     </el-tooltip>
     <SearchModal v-model="modalVisible" />

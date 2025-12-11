@@ -19,27 +19,41 @@ const titleMap: Record<string, string> = {
   '运维导航': 'menu.opsNavigation',
   '集群': 'menu.cluster',
   '集群管理': 'menu.clusterManagement',
+  '集群事件': 'menu.clusterEvents',
+  '自定义资源': 'menu.crd',
   '节点': 'menu.node',
   '命名空间': 'menu.namespace',
   '工作负载': 'menu.workloads',
+  'Pod': 'menu.pod',
   'pod': 'menu.pod',
+  'Deployment': 'menu.deployment',
   'deployment': 'menu.deployment',
   '存储': 'menu.storage',
+  'PV': 'menu.pv',
   'pv': 'menu.pv',
+  'PVC': 'menu.pvc',
   'pvc': 'menu.pvc',
   '网络': 'menu.network',
+  'Service': 'menu.service',
   'service': 'menu.service',
+  'Ingress': 'menu.ingress',
   'ingress': 'menu.ingress',
   '配置管理': 'menu.config',
+  'ConfigMap': 'menu.configmap',
   'configmap': 'menu.configmap',
+  'Secret': 'menu.secret',
   'secret': 'menu.secret',
   '项目管理': 'menu.project',
   '中文文档': 'menu.chineseDocs',
   '我的博客': 'menu.myBlog',
   '技术栈': 'menu.techStack',
-  '权限': 'menu.permission',
-  '页面级': 'menu.pageLevel',
-  '按钮级': 'menu.buttonLevel'
+  '权限演示': 'menu.permission',
+  '页面级权限': 'menu.pageLevel',
+  '按钮级权限': 'menu.buttonLevel',
+  '系统管理': 'menu.admin',
+  '用户管理': 'menu.userManagement',
+  '角色管理': 'menu.roleManagement',
+  '系统设置': 'menu.systemSettings'
 }
 
 // 获取国际化标题
@@ -94,7 +108,7 @@ listenerRouteChange((route) => {
 
 <style lang="scss" scoped>
 .el-breadcrumb {
-  line-height: var(--v3-navigationbar-height);
+  line-height: var(--ck-navigationbar-height);
   .no-redirect {
     color: var(--el-text-color-placeholder);
   }

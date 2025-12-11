@@ -1,8 +1,8 @@
 // [重要] 导入我们的请求方法 request (Go backend returns {code, data, message} format)
-import { request } from "@/utils/service" 
+import { request } from "@/utils/service"
 
 // ... 接口定义部分保持不变 ...
-export interface ClusterInfo { 
+export interface ClusterInfo {
   id: string
   name: string
   server: string
@@ -56,10 +56,17 @@ export function setActiveCluster(idOrName: string) {
 
 /** 创建新集群 */
 export function createCluster(data: CreateClusterRequest) {
+  // 使用更安全的 Base64 编码方式，支持 UTF-8 字符
+  const kubeconfigBase64 = btoa(unescape(encodeURIComponent(data.kubeconfigData)))
+
   const payload = {
     ...data,
-    kubeconfigData: btoa(data.kubeconfigData)
+    kubeconfigData: kubeconfigBase64
   }
+
+  console.log('发送的 kubeconfig 数据长度:', data.kubeconfigData.length)
+  console.log('Base64 编码后长度:', kubeconfigBase64.length)
+
   return request({
     url: "/api/v1/clusters",
     method: "post",

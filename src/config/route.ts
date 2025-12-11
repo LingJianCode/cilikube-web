@@ -20,8 +20,8 @@ interface RouteSettings {
 }
 
 const routeSettings: RouteSettings = {
-  dynamic: false,
-  defaultRoles: ["DEFAULT_ROLE"],
+  dynamic: true,
+  defaultRoles: ["admin"], // admin角色展示所有菜单
   thirdLevelRouteCache: false
 }
 

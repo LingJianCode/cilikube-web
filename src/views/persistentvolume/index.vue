@@ -1,44 +1,27 @@
 <template>
     <div class="pv-page-container">
-      <!-- Breadcrumbs -->
-      <el-breadcrumb separator="/" class="page-breadcrumb">
-        <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-        <el-breadcrumb-item>存储管理</el-breadcrumb-item>
-        <el-breadcrumb-item>PersistentVolumes (PV)</el-breadcrumb-item>
-      </el-breadcrumb>
-  
       <!-- Header: Title & Create Button -->
       <div class="page-header">
-        <h1 class="page-title">PersistentVolumes (PV) 列表</h1>
+        <h1 class="page-title">{{ $t('persistentVolumeManagement.title') }}</h1>
          <el-button type="primary" :icon="PlusIcon" @click="handleAddPV" :loading="loading.page">
-           创建 PV (YAML)
+           {{ $t('persistentVolumeManagement.actions.create') }}
          </el-button>
       </div>
-  
-       <!-- Cluster Knowledge Alert -->
-       <el-alert
-         title="关于 PersistentVolumes"
-         type="info"
-         show-icon
-         :closable="true"
-         class="info-alert"
-         description="PersistentVolume (PV) 是集群中的一块存储，可以由管理员事先供应，或者使用存储类（StorageClass）来动态供应。 PV 是与 Pod 生命周期无关的卷插件，如同节点是集群资源一样，PV 也是集群资源。PV 和普通的 Volume 一样，也是使用卷插件来实现的，只是它们拥有独立于任何使用 PV 的 Pod 的生命周期。"
-       />
-  
+
       <!-- Filter Bar: Search, Refresh -->
       <div class="filter-bar">
           <!-- No Namespace Select for PVs -->
           <el-input
               v-model="searchQuery"
-              placeholder="搜索 PV 名称 / StorageClass"
+              :placeholder="$t('persistentVolumeManagement.searchPlaceholder')"
               :prefix-icon="SearchIcon"
               clearable
               @input="handleSearchDebounced"
               class="filter-item search-input"
               :disabled="loading.pvs"
           />
-  
-          <el-tooltip content="刷新列表" placement="top">
+
+          <el-tooltip :content="$t('actions.refresh')" placement="top">
               <el-button
                 :icon="RefreshIcon"
                 circle
@@ -47,26 +30,27 @@
               />
           </el-tooltip>
       </div>
-  
-      <!-- PVs Table -->
-      <el-table
-          :data="paginatedData"
-          v-loading="loading.pvs"
-          border
-          stripe
-          style="width: 100%"
-          @sort-change="handleSortChange"
-          class="pv-table"
-          :default-sort="{ prop: 'createdAt', order: 'descending' }"
-          row-key="uid"
-      >
-          <el-table-column prop="name" label="名称" min-width="250" sortable="custom" fixed show-overflow-tooltip>
+
+      <!-- PVs Table Card -->
+      <el-card class="pv-table-card" shadow="hover">
+        <el-table
+            :data="paginatedData"
+            v-loading="loading.pvs"
+            border
+            stripe
+            style="width: 100%"
+            @sort-change="handleSortChange"
+            class="pv-table"
+            :default-sort="{ prop: 'createdAt', order: 'descending' }"
+            row-key="uid"
+        >
+          <el-table-column prop="name" :label="$t('persistentVolumeManagement.columns.name')" min-width="250" sortable="custom" fixed show-overflow-tooltip>
                <template #default="{ row }">
-                  <el-icon class="pv-icon"><Coin /></el-icon> <!-- Using Coin icon for PV -->
+                  <el-icon class="pv-icon"><Coin /></el-icon>
                   <span class="pv-name">{{ row.name }}</span>
               </template>
           </el-table-column>
-          <el-table-column prop="status" label="状态" min-width="120" sortable="custom" align="center">
+          <el-table-column prop="status" :label="$t('persistentVolumeManagement.columns.status')" min-width="120" sortable="custom" align="center">
               <template #default="{ row }">
                   <el-tag :type="getStatusTagType(row.status)" size="small" effect="light">
                        <el-icon class="status-icon" v-if="getStatusIcon(row.status)">
@@ -76,12 +60,12 @@
                   </el-tag>
               </template>
           </el-table-column>
-          <el-table-column prop="capacity" label="容量" min-width="100" sortable="custom" align="right">
+          <el-table-column prop="capacity" :label="$t('persistentVolumeManagement.columns.capacity')" min-width="100" sortable="custom" align="right">
                <template #default="{ row }">
                   {{ formatCapacity(row.capacity) }}
               </template>
           </el-table-column>
-          <el-table-column prop="accessModes" label="访问模式" min-width="150">
+          <el-table-column prop="accessModes" :label="$t('persistentVolumeManagement.columns.accessModes')" min-width="150">
                <template #default="{ row }">
                   <div v-for="mode in row.accessModes" :key="mode">
                       <el-tag size="small" type="info" effect="plain" style="margin-right: 4px;">{{ mode }}</el-tag>
@@ -89,71 +73,72 @@
                    <span v-if="!row.accessModes || row.accessModes.length === 0">N/A</span>
               </template>
           </el-table-column>
-           <el-table-column prop="reclaimPolicy" label="回收策略" min-width="120" align="center">
+           <el-table-column prop="reclaimPolicy" :label="$t('persistentVolumeManagement.columns.reclaimPolicy')" min-width="120" align="center">
               <template #default="{ row }">
                   <el-tag :type="getReclaimPolicyTagType(row.reclaimPolicy)" size="small">{{ row.reclaimPolicy }}</el-tag>
               </template>
            </el-table-column>
-            <el-table-column prop="volumeMode" label="卷模式" min-width="120" align="center">
+            <el-table-column prop="volumeMode" :label="$t('persistentVolumeManagement.columns.volumeMode')" min-width="120" align="center">
                <template #default="{ row }">
                   <el-tag :type="getVolumeModeTagType(row.volumeMode)" size="small" effect="light">{{ row.volumeMode }}</el-tag>
               </template>
             </el-table-column>
-           <el-table-column prop="storageClass" label="StorageClass" min-width="150" show-overflow-tooltip>
+           <el-table-column prop="storageClass" :label="$t('persistentVolumeManagement.columns.storageClass')" min-width="150" show-overflow-tooltip>
                 <template #default="{ row }">
                    {{ row.storageClass || '-' }}
                </template>
            </el-table-column>
-           <el-table-column prop="claim" label="绑定到 (PVC)" min-width="200" show-overflow-tooltip>
+           <el-table-column prop="claim" :label="$t('persistentVolumeManagement.columns.boundClaim')" min-width="200" show-overflow-tooltip>
                <template #default="{ row }">
                    {{ row.claim || '-' }}
                </template>
            </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" min-width="180" sortable="custom" />
-          <el-table-column label="操作" width="130" align="center" fixed="right">
+          <el-table-column prop="createdAt" :label="$t('persistentVolumeManagement.columns.createdAt')" min-width="180" sortable="custom" />
+          <el-table-column :label="$t('persistentVolumeManagement.columns.actions')" width="130" align="center" fixed="right">
               <template #default="{ row }">
-                   <el-tooltip content="编辑 YAML" placement="top">
+                   <el-tooltip :content="$t('persistentVolumeManagement.actions.editYaml')" placement="top">
                       <el-button link type="primary" :icon="EditPenIcon" @click="editPVYaml(row)" />
                   </el-tooltip>
-                  <el-tooltip content="删除" placement="top">
+                  <el-tooltip :content="$t('persistentVolumeManagement.actions.delete')" placement="top">
                       <el-button link type="danger" :icon="DeleteIcon" @click="handleDeletePV(row)" />
                   </el-tooltip>
               </template>
           </el-table-column>
            <template #empty>
-            <el-empty description="未找到 PersistentVolumes" :image-size="100" />
+            <el-empty :description="$t('persistentVolumeManagement.messages.noPVs')" :image-size="100" />
            </template>
       </el-table>
-  
-      <!-- Pagination -->
-      <div class="pagination-container" v-if="!loading.pvs && totalPVs > 0">
-          <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :page-sizes="[10, 20, 50, 100]"
-              :total="totalPVs"
-              layout="total, sizes, prev, pager, next, jumper"
-              background
-              @size-change="handleSizeChange"
-              @current-change="handlePageChange"
-              :disabled="loading.pvs"
-          />
-      </div>
+
+        <!-- Pagination -->
+        <div class="pagination-container" v-if="!loading.pvs && totalPVs > 0">
+            <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[10, 20, 50, 100]"
+                :total="totalPVs"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="handleSizeChange"
+                @current-change="handlePageChange"
+                :disabled="loading.pvs"
+            />
+        </div>
+      </el-card>
   
       <!-- Create/Edit Dialog (YAML focus) -->
       <el-dialog :title="dialogTitle" v-model="dialogVisible" width="70%" :close-on-click-modal="false">
          <el-alert type="info" :closable="false" style="margin-bottom: 20px;">
-           请在此处粘贴或编辑 PersistentVolume 的 YAML 配置。PV 是集群范围资源，不属于任何命名空间。
+           {{ $t('persistentVolumeManagement.messages.yamlEditTip') }}
          </el-alert>
          <!-- Integrate a YAML editor component here -->
          <div class="yaml-editor-placeholder">
-              YAML 编辑器占位符 (例如: 使用 Monaco Editor 或 Codemirror)
+              {{ $t('persistentVolumeManagement.messages.yamlEditorPlaceholder') }}
               <pre>{{ yamlContent || placeholderYaml }}</pre>
          </div>
         <template #footer>
           <div class="dialog-footer">
-              <el-button @click="dialogVisible = false">取 消</el-button>
-              <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">应用 YAML</el-button>
+              <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+              <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">{{ $t('persistentVolumeManagement.actions.applyYaml') }}</el-button>
           </div>
         </template>
       </el-dialog>
@@ -163,6 +148,7 @@
   
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted } from "vue"
+  import { useI18n } from 'vue-i18n'
   import { ElMessage, ElMessageBox } from "element-plus"
   import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
   import dayjs from "dayjs"
@@ -253,9 +239,12 @@
       page: false, pvs: false, dialogSave: false
   })
   
+  // Get i18n instance
+  const { t } = useI18n()
+  
   // Dialog state (YAML focus)
   const dialogVisible = ref(false)
-  const dialogTitle = ref("创建 PV (YAML)");
+  const dialogTitle = computed(() => currentEditPV.value ? `${t('persistentVolumeManagement.actions.edit')}: ${currentEditPV.value.metadata.name} (YAML)` : t('persistentVolumeManagement.messages.createPVTitle'))
   const currentEditPV = ref<K8sPersistentVolume | null>(null); // Store raw data for editing
   const yamlContent = ref("");
   const placeholderYaml = ref(`apiVersion: v1
@@ -476,13 +465,12 @@
   const handleAddPV = () => {
       currentEditPV.value = null;
       yamlContent.value = placeholderYaml.value; // Use placeholder for new
-      dialogTitle.value = "创建 PV (YAML)";
       dialogVisible.value = true;
   };
   
   // Fetch full YAML for editing
   const editPVYaml = async (pv: PVDisplayItem) => {
-       ElMessage.info(`模拟: 获取 PV "${pv.name}" 的 YAML`);
+       ElMessage.info(t('persistentVolumeManagement.messages.fetchingYaml').replace('{name}', pv.name));
        // --- Replace with actual API call to get YAML ---
        // try {
        //    loading.pvs = true;
@@ -499,13 +487,12 @@
        //        dialogTitle.value = `编辑 PV: ${pv.name} (YAML)`;
        //        dialogVisible.value = true;
        //    } else { // ... error handling ...}
-       // } catch(e) { // ... error handling ...}
+       // } catch(e { // ... error handling ...}
        // finally { loading.pvs = false; }
   
        // Simulate fetching and opening editor
        currentEditPV.value = pv.rawData || null; // Use stored raw data if available
        yamlContent.value = JSON.stringify(pv.rawData, null, 2); // Use JSON instead of yaml for now
-       dialogTitle.value = `编辑 PV: ${pv.name} (YAML)`;
        dialogVisible.value = true;
   };
   
@@ -593,36 +580,203 @@
   
   </script>
   
-  <style lang="scss" scoped>
-  // Define fallbacks or import variables
-  $page-padding: 20px; $spacing-md: 15px; $spacing-lg: 20px;
-  $font-size-base: 14px; $font-size-small: 12px; $font-size-large: 16px; $font-size-extra-large: 24px;
-  $border-radius-base: 4px; $kube-pv-icon-color: #f59e0b; // Example Amber color
+<style lang="scss" scoped>
+// Define fallbacks or import variables
+$page-padding: 24px; $spacing-md: 16px; $spacing-lg: 24px;
+$font-size-base: 14px; $font-size-small: 12px; $font-size-large: 16px; $font-size-extra-large: 28px;
+$border-radius-base: 4px; $kube-pv-icon-color: #f59e0b; // Example Amber color
+
+.pv-page-container { 
+  padding: $page-padding; 
+  background-color: var(--el-bg-color-page);
+  box-sizing: border-box;
+}
+.page-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: $spacing-lg; 
+  flex-wrap: wrap; 
+  gap: $spacing-md;
+}
+.page-title { 
+  font-size: $font-size-extra-large; 
+  font-weight: 600; 
+  color: var(--el-text-color-primary); 
+  margin: 0;
+}
+.filter-bar { 
+  display: flex; 
+  align-items: center; 
+  flex-wrap: wrap; 
+  gap: $spacing-md; 
+  margin-bottom: $spacing-lg; 
+  padding: $spacing-md; 
+  background-color: var(--el-bg-color); 
+  border-radius: $border-radius-base; 
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+.search-input { width: 300px; }
+
+.pv-table-card {
+  margin-bottom: $spacing-lg;
+  border-radius: $border-radius-base;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--el-border-color-lighter);
   
-  .pv-page-container { padding: $page-padding; background-color: var(--el-bg-color-page); }
-  .page-breadcrumb { margin-bottom: $spacing-lg; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: $spacing-md; flex-wrap: wrap; gap: $spacing-md; }
-  .page-title { font-size: $font-size-extra-large; font-weight: 600; color: var(--el-text-color-primary); margin: 0; }
-  .info-alert { margin-bottom: $spacing-lg; background-color: var(--el-color-info-light-9); :deep(.el-alert__description) { font-size: $font-size-small; color: var(--el-text-color-regular); line-height: 1.6; } }
-  .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-md; margin-bottom: $spacing-lg; padding: $spacing-md; background-color: var(--el-bg-color); border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); }
-  .filter-item { }
-  // .namespace-select { width: 240px; } // Removed
-  .search-input { width: 300px; }
+  :deep(.el-card__body) {
+    padding: 0;
+  }
+}
   
-  .pv-table {
-     border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); overflow: hidden;
-      :deep(th.el-table__cell) { background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-weight: 600; font-size: $font-size-small; }
-      :deep(td.el-table__cell) { padding: 8px 0; font-size: $font-size-base; vertical-align: middle; }
-     .pv-icon { margin-right: 8px; color: $kube-pv-icon-color; vertical-align: middle; font-size: 18px; position: relative; top: -1px; }
-     .pv-name { font-weight: 500; vertical-align: middle; color: var(--el-text-color-regular); }
-     .status-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: 22px; line-height: 20px; font-size: $font-size-small; }
+.pv-table {
+     border: none;
+     border-radius: 0;
+     overflow: hidden;
+     :deep(th.el-table__cell) { 
+       background-color: var(--el-fill-color-lighter); 
+       color: var(--el-text-color-secondary); 
+       font-weight: 600; 
+       font-size: $font-size-small;
+       border-bottom: 1px solid var(--el-border-color-light);
+     }
+     :deep(td.el-table__cell) { 
+       padding: 12px 0; 
+       font-size: $font-size-base; 
+       vertical-align: middle;
+       border-bottom: 1px solid var(--el-border-color-lighter);
+     }
+     :deep(.el-table__inner-wrapper::before) {
+       height: 0;
+     }
+     .pv-icon { 
+       margin-right: 8px; 
+       color: $kube-pv-icon-color; 
+       vertical-align: middle; 
+       font-size: 18px; 
+       position: relative; 
+       top: -1px; 
+     }
+     .pv-name { 
+       font-weight: 500; 
+       vertical-align: middle; 
+       color: var(--el-text-color-primary); 
+     }
+     .status-tag { 
+       display: inline-flex; 
+       align-items: center; 
+       gap: 4px; 
+       padding: 2px 8px; 
+       height: 24px; 
+       line-height: 20px; 
+       font-size: $font-size-small;
+       border-radius: 12px;
+     }
      .status-icon { font-size: 12px; }
      .is-loading { animation: rotating 1.5s linear infinite; }
      @keyframes rotating { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  }
+}
   
-  .el-table .el-button.is-link { font-size: 14px; padding: 4px; margin: 0 3px; vertical-align: middle; }
-  .pagination-container { display: flex; justify-content: flex-end; margin-top: $spacing-lg; }
-  .yaml-editor-placeholder { border: 1px dashed var(--el-border-color); padding: 20px; margin-top: 10px; min-height: 350px; max-height: 60vh; background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-family: monospace; white-space: pre-wrap; overflow: auto; font-size: 13px; line-height: 1.5; }
-  .dialog-footer { text-align: right; padding-top: 10px; }
+.el-table .el-button.is-link { 
+  font-size: 14px; 
+  padding: 4px; 
+  margin: 0 3px; 
+  vertical-align: middle;
+}
+.pagination-container { 
+  display: flex; 
+  justify-content: flex-end; 
+  margin-top: $spacing-lg;
+  padding: 0 16px 16px 16px;
+}
+.yaml-editor-placeholder { 
+  border: 1px dashed var(--el-border-color); 
+  padding: 20px; 
+  margin-top: 10px; 
+  min-height: 350px; 
+  max-height: 60vh; 
+  background-color: var(--el-fill-color-lighter); 
+  color: var(--el-text-color-secondary); 
+  font-family: monospace; 
+  white-space: pre-wrap; 
+  overflow: auto; 
+  font-size: 13px; 
+  line-height: 1.5; 
+  border-radius: $border-radius-base;
+}
+.dialog-footer { 
+  text-align: right; 
+  padding-top: 16px;
+}
+
+/* 按钮样式 - 透明背景 + 彩色边框 */
+:deep(.el-button--primary) {
+  background-color: transparent;
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  transition: all 0.2s;
+}
+
+:deep(.el-button--primary:hover) {
+  background-color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
+}
+
+:deep(.el-button--primary:active),
+:deep(.el-button--primary.is-active) {
+  background-color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  color: #ffffff;
+  transform: translateY(0);
+}
+
+:deep(.el-button--success) {
+  background-color: transparent;
+  border-color: var(--el-color-success);
+  color: var(--el-color-success);
+  transition: all 0.2s;
+}
+
+:deep(.el-button--success:hover) {
+  background-color: var(--el-color-success);
+  border-color: var(--el-color-success);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+}
+
+:deep(.el-button--success:active),
+:deep(.el-button--success.is-active) {
+  background-color: var(--el-color-success);
+  border-color: var(--el-color-success);
+  color: #ffffff;
+  transform: translateY(0);
+}
+
+:deep(.el-button--danger) {
+  background-color: transparent;
+  border-color: var(--el-color-danger);
+  color: var(--el-color-danger);
+  transition: all 0.2s;
+}
+
+:deep(.el-button--danger:hover) {
+  background-color: var(--el-color-danger);
+  border-color: var(--el-color-danger);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.2);
+}
+
+:deep(.el-button--danger:active),
+:deep(.el-button--danger.is-active) {
+  background-color: var(--el-color-danger);
+  border-color: var(--el-color-danger);
+  color: #ffffff;
+  transform: translateY(0);
+}
   </style>

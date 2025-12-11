@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import { computed, ref, watchEffect } from "vue"
+import { useI18n } from "vue-i18n"
 import { ElMessage } from "element-plus"
 import screenfull from "screenfull"
+
+const { t } = useI18n()
 
 interface Props {
   /** 全屏的元素，默认是 html */
@@ -16,22 +19,24 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   element: "html",
-  openTips: "全屏",
-  exitTips: "退出全屏",
+  openTips: "",
+  exitTips: "",
   content: false
 })
 
 //#region 全屏
 const isFullscreen = ref<boolean>(false)
 const fullscreenTips = computed(() => {
-  return isFullscreen.value ? props.exitTips : props.openTips
+  const openTips = props.openTips || t('ui.fullscreen.enter')
+  const exitTips = props.exitTips || t('ui.fullscreen.exit')
+  return isFullscreen.value ? exitTips : openTips
 })
 const fullscreenSvgName = computed(() => {
   return isFullscreen.value ? "fullscreen-exit" : "fullscreen"
 })
 const handleFullscreenClick = () => {
   const dom = document.querySelector(props.element) || undefined
-  screenfull.isEnabled ? screenfull.toggle(dom) : ElMessage.warning("您的浏览器无法工作")
+  screenfull.isEnabled ? screenfull.toggle(dom) : ElMessage.warning(t('ui.fullscreen.browserNotSupported'))
 }
 const handleFullscreenChange = () => {
   isFullscreen.value = screenfull.isFullscreen
@@ -51,7 +56,7 @@ watchEffect((onCleanup) => {
 //#region 内容区
 const isContentLarge = ref<boolean>(false)
 const contentLargeTips = computed(() => {
-  return isContentLarge.value ? "内容区复原" : "内容区放大"
+  return isContentLarge.value ? t('ui.fullscreen.contentRestore') : t('ui.fullscreen.contentEnlarge')
 })
 const contentLargeSvgName = computed(() => {
   return isContentLarge.value ? "fullscreen-exit" : "fullscreen"
@@ -86,7 +91,7 @@ const handleContentFullClick = () => {
           <!-- 内容区放大 -->
           <el-dropdown-item @click="handleContentLargeClick">{{ contentLargeTips }}</el-dropdown-item>
           <!-- 内容区全屏 -->
-          <el-dropdown-item @click="handleContentFullClick">内容区全屏</el-dropdown-item>
+          <el-dropdown-item @click="handleContentFullClick">{{ t('ui.fullscreen.contentFullscreen') }}</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>

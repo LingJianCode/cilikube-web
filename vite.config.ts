@@ -31,7 +31,7 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
       /** 设置 host: true 才可以使用 Network 的形式，以 IP 访问项目 */
       host: true, // host: "0.0.0.0"
       /** 端口号 */
-      port: 8888,
+      port: 5173,
       /** 是否自动打开浏览器 */
       open: false,
       /** 跨域设置允许 */
@@ -44,7 +44,7 @@ export default ({ mode }: ConfigEnv): UserConfigExport => {
         // If your backend runs on 8080 locally:
         "/api/v1": {
           // target: "https://mock.mengxuegu.com/mock/66be0c9755057713835fe7c0", // Keep mock if needed for other things
-          target: "http://localhost:8080", // <<< Point to your LOCAL backend for fetching dependencies
+          target: "http://192.168.2.101:8080", // <<< Point to your LOCAL backend for fetching dependencies
           ws: true,
           /** 是否允许跨域 */
           changeOrigin: true

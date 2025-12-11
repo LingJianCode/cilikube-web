@@ -1,16 +1,18 @@
 <script lang="ts" setup>
-import { reactive, ref } from "vue"
-import { useRouter } from "vue-router"
+import { reactive, ref, onMounted } from "vue"
+import { useRouter, useRoute } from "vue-router"
 import { useUserStore } from "@/store/modules/user"
 import { type FormInstance, type FormRules } from "element-plus"
-import { User, Lock, Key, Picture, Loading } from "@element-plus/icons-vue"
-import { getLoginCodeApi } from "@/api/login"
+import { User, Lock } from "@element-plus/icons-vue"
+import { ElMessage } from "element-plus"
 import { type LoginRequestData } from "@/api/login/types/login"
 import ThemeSwitch from "@/components/ThemeSwitch/index.vue"
 import Owl from "./components/Owl.vue"
+import OAuthButton from "./components/OAuthButton.vue"
 import { useFocus } from "./hooks/useFocus"
 
 const router = useRouter()
+const route = useRoute()
 const { isFocus, handleBlur, handleFocus } = useFocus()
 
 /** 登录表单元素的引用 */
@@ -18,35 +20,41 @@ const loginFormRef = ref<FormInstance | null>(null)
 
 /** 登录按钮 Loading */
 const loading = ref(false)
-/** 验证码图片 URL */
-const codeUrl = ref("")
+
+/** 错误消息 */
+const errorMessage = ref("")
+
 /** 登录表单数据 */
 const loginFormData: LoginRequestData = reactive({
-  username: "admin",
-  password: "12345678",
-  code: "0000" // 固定验证码，跳过验证
+  username: "",
+  password: ""
 })
+
 /** 登录表单校验规则 */
 const loginFormRules: FormRules = {
   username: [{ required: true, message: "请输入用户名", trigger: "blur" }],
   password: [
     { required: true, message: "请输入密码", trigger: "blur" },
-    { min: 8, max: 16, message: "长度在 8 到 16 个字符", trigger: "blur" }
+    { min: 6, message: "密码长度至少6个字符", trigger: "blur" }
   ]
-  // 移除验证码校验
 }
-/** 登录逻辑 */
+
+/** 用户名密码登录逻辑 */
 const handleLogin = () => {
   loginFormRef.value?.validate((valid: boolean, fields) => {
     if (valid) {
       loading.value = true
+      errorMessage.value = ""
+      
       useUserStore()
         .login(loginFormData)
         .then(() => {
+          ElMessage.success("登录成功")
           router.push({ path: "/board/dashboard" })
         })
-        .catch(() => {
-          // 移除验证码重新生成逻辑
+        .catch((error) => {
+          console.error("登录失败:", error)
+          errorMessage.value = error.response?.data?.message || "登录失败，请检查用户名和密码"
           loginFormData.password = ""
         })
         .finally(() => {
@@ -57,14 +65,13 @@ const handleLogin = () => {
     }
   })
 }
-/** 创建验证码 - 简化为空函数 */
-const createCode = () => {
-  // 移除验证码生成逻辑
-  codeUrl.value = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjQwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LXNpemU9IjE2Ij4wMDAwPC90ZXh0Pjwvc3ZnPg=="
+
+/** OAuth登录错误处理 */
+const handleOAuthError = (message: string) => {
+  errorMessage.value = message
 }
 
-/** 初始化验证码 */
-createCode()
+
 </script>
 
 <template>
@@ -76,6 +83,17 @@ createCode()
         <img src="@/assets/layouts/logo-text-1.png" />
       </div>
       <div class="content">
+        <!-- 错误消息显示 -->
+        <el-alert
+          v-if="errorMessage"
+          :title="errorMessage"
+          type="error"
+          :closable="false"
+          show-icon
+          class="error-alert"
+        />
+        
+        <!-- 用户名密码登录表单 -->
         <el-form ref="loginFormRef" :model="loginFormData" :rules="loginFormRules" @keyup.enter="handleLogin">
           <el-form-item prop="username">
             <el-input
@@ -100,34 +118,30 @@ createCode()
               @focus="handleFocus"
             />
           </el-form-item>
-          <el-form-item prop="code">
-            <el-input
-              v-model.trim="loginFormData.code"
-              placeholder="验证码"
-              type="text"
-              tabindex="3"
-              :prefix-icon="Key"
-              maxlength="7"
-              size="large"
-            >
-              <template #append>
-                <el-image :src="codeUrl" @click="createCode" draggable="false">
-                  <template #placeholder>
-                    <el-icon>
-                      <Picture />
-                    </el-icon>
-                  </template>
-                  <template #error>
-                    <el-icon>
-                      <Loading />
-                    </el-icon>
-                  </template>
-                </el-image>
-              </template>
-            </el-input>
-          </el-form-item>
-          <el-button :loading="loading" type="primary" size="large" @click.prevent="handleLogin">登 录</el-button>
+          <el-button 
+            :loading="loading" 
+            type="primary" 
+            size="large" 
+            @click.prevent="handleLogin"
+            class="login-button"
+          >
+            登 录
+          </el-button>
         </el-form>
+
+        <!-- 分割线 -->
+        <div class="divider">
+          <span>或</span>
+        </div>
+
+        <!-- OAuth登录按钮 -->
+        <div class="oauth-login">
+          <OAuthButton 
+            provider="github" 
+            :block="true"
+            @error="handleOAuthError"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -141,12 +155,14 @@ createCode()
   align-items: center;
   width: 100%;
   min-height: 100%;
+  
   .theme-switch {
     position: fixed;
     top: 5%;
     right: 5%;
     cursor: pointer;
   }
+  
   .login-card {
     width: 480px;
     max-width: 90%;
@@ -154,33 +170,53 @@ createCode()
     box-shadow: 0 0 50px #054cf1;
     background-color: var(--el-bg-color);
     overflow: hidden;
+    
     .title {
       display: flex;
       justify-content: center;
       vertical-align: middle;
       align-items: center;
       height: 120px;
+      
       img {
         height: 100%;
       }
     }
+    
     .content {
       padding: 10px 50px 50px 50px;
-      :deep(.el-input-group__append) {
-        padding: 0;
-        overflow: hidden;
-        .el-image {
-          width: 100px;
-          height: 40px;
-          border-left: 0px;
-          user-select: none;
-          cursor: pointer;
-          text-align: center;
-        }
+      
+      .error-alert {
+        margin-bottom: 20px;
       }
-      .el-button {
+      
+      .login-button {
         width: 100%;
         margin-top: 10px;
+      }
+      
+      .divider {
+        display: flex;
+        align-items: center;
+        margin: 30px 0 20px 0;
+        
+        &::before,
+        &::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: var(--el-border-color-light);
+        }
+        
+        span {
+          padding: 0 15px;
+          color: var(--el-text-color-regular);
+          font-size: 14px;
+        }
+      }
+      
+      .oauth-login {
+        // OAuth button styles are handled by the OAuthButton component
       }
     }
   }

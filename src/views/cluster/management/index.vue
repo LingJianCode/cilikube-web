@@ -1,221 +1,226 @@
 <template>
-  <div class="cluster-management-container">
+  <div class="cluster-management">
     <!-- 页面头部 -->
     <div class="page-header">
-      <div class="header-content">
-        <h1 class="page-title">集群管理</h1>
-        <p class="page-description">管理您的 Kubernetes 集群，支持多集群切换和监控</p>
-      </div>
+      <h1 class="page-title">{{ $t('clusterManagement.title') }}</h1>
       <div class="header-actions">
-        <el-button type="primary" :icon="Plus" @click="handleOpenDialog()" size="large">
-          添加集群
+        <el-button :icon="Refresh" @click="fetchAllData" :loading="isLoading" circle />
+        <el-button type="primary" :icon="Plus" @click="handleOpenDialog">
+          {{ $t('clusterManagement.addCluster') }}
         </el-button>
       </div>
-    </div>
-
-    <!-- 统计卡片区域 -->
-    <div class="stats-grid" v-loading="isLoading">
-      <StatCard
-        :icon="DataBoard"
-        label="集群总数"
-        :value="stats.total"
-        iconBg="linear-gradient(135deg, #409EFF 0%, #3A8FE8 100%)"
-      />
-      <StatCard
-        :icon="Select"
-        label="活跃集群"
-        :value="stats.active"
-        iconBg="linear-gradient(135deg, #66B1FF 0%, #5DADE2 100%)"
-        :active="true"
-      />
-      <StatCard
-        :icon="CircleCheck"
-        label="健康集群"
-        :value="stats.healthy"
-        iconBg="linear-gradient(135deg, #5DADE2 0%, #48C9B0 100%)"
-      />
-      <StatCard
-        :icon="Warning"
-        label="异常集群"
-        :value="stats.unhealthy"
-        iconBg="linear-gradient(135deg, #F5A623 0%, #F76B1C 100%)"
-      />
     </div>
 
     <!-- 工具栏 -->
     <div class="toolbar">
-      <div class="toolbar-left">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索集群名称、环境或服务器地址..."
-          :prefix-icon="Search"
-          clearable
-          style="width: 320px"
-        />
-        <el-select
-          v-model="filterEnvironment"
-          placeholder="筛选环境"
-          clearable
-          style="width: 150px"
-        >
-          <el-option label="全部环境" value="" />
-          <el-option label="生产环境" value="production" />
-          <el-option label="预发布" value="staging" />
-          <el-option label="开发环境" value="development" />
+      <div class="search-filters">
+        <el-input v-model="searchQuery" :placeholder="$t('clusterManagement.searchPlaceholder')" :prefix-icon="Search"
+          clearable class="search-input" />
+        <el-select v-model="filterEnvironment" :placeholder="$t('clusterManagement.filterEnvironment')" clearable
+          class="filter-select">
+          <el-option :label="$t('clusterManagement.allEnvironments')" value="" />
+          <el-option :label="$t('clusterManagement.environments.production')" value="production" />
+          <el-option :label="$t('clusterManagement.environments.staging')" value="staging" />
+          <el-option :label="$t('clusterManagement.environments.development')" value="development" />
         </el-select>
-        <el-select
-          v-model="filterStatus"
-          placeholder="筛选状态"
-          clearable
-          style="width: 150px"
-        >
-          <el-option label="全部状态" value="" />
-          <el-option label="可用" value="available" />
-          <el-option label="不可用" value="unavailable" />
+        <el-select v-model="filterStatus" :placeholder="$t('clusterManagement.filterStatus')" clearable
+          class="filter-select">
+          <el-option :label="$t('clusterManagement.allStatuses')" value="" />
+          <el-option :label="$t('clusterManagement.statuses.available')" value="available" />
+          <el-option :label="$t('clusterManagement.statuses.unavailable')" value="unavailable" />
         </el-select>
       </div>
       <div class="toolbar-right">
-        <el-radio-group v-model="viewMode" size="default">
-          <el-radio-button value="card">
-            <el-icon><Grid /></el-icon>
-            卡片视图
-          </el-radio-button>
-          <el-radio-button value="table">
-            <el-icon><List /></el-icon>
-            列表视图
-          </el-radio-button>
-        </el-radio-group>
-        <el-button :icon="Refresh" @click="fetchAllData" :loading="isLoading">
-          刷新
-        </el-button>
+        <el-button-group class="view-toggle">
+          <el-button :type="viewMode === 'card' ? 'primary' : ''" :icon="Grid" @click="viewMode = 'card'" />
+          <el-button :type="viewMode === 'list' ? 'primary' : ''" :icon="List" @click="viewMode = 'list'" />
+        </el-button-group>
       </div>
     </div>
 
-    <!-- 卡片视图 -->
-    <transition name="fade">
-      <div v-if="viewMode === 'card'" class="clusters-grid" v-loading="isLoading">
-        <ClusterCard
-          v-for="cluster in filteredClusters"
-          :key="cluster.id"
-          :cluster="cluster"
-          :activeClusterName="activeClusterName"
-          @setActive="handleSetActive"
-          @delete="handleDelete"
-        />
-        <div v-if="filteredClusters.length === 0" class="empty-state">
-          <el-empty description="没有找到匹配的集群" />
+    <!-- 集群列表 -->
+    <div class="cluster-list" v-loading="isLoading">
+      <!-- 卡片视图 -->
+      <div v-if="filteredClusters.length > 0 && viewMode === 'card'" class="cluster-grid">
+        <div v-for="cluster in filteredClusters" :key="cluster.id" class="cluster-card"
+          :class="{ 'active-cluster': isCurrentCluster(cluster) }" @click="handleClusterClick(cluster)">
+          <div class="card-header">
+            <div class="cluster-info">
+              <div class="cluster-name-row">
+                <div class="status-dot" :class="getStatusClass(cluster.status)"></div>
+                <div class="cluster-name">{{ cluster.name }}</div>
+                <el-tag v-if="isCurrentCluster(cluster)" type="success" size="small" class="active-badge">
+                  {{ $t('clusterManagement.actions.active') }}
+                </el-tag>
+              </div>
+              <div class="cluster-server">{{ cluster.server }}</div>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="cluster-meta">
+              <div class="meta-item" v-if="cluster.version">
+                <span class="meta-label">{{ $t('clusterManagement.columns.version') }}</span>
+                <span class="meta-value">{{ cluster.version }}</span>
+              </div>
+              <div class="meta-item" v-if="cluster.environment">
+                <span class="meta-label">{{ $t('clusterManagement.columns.environment') }}</span>
+                <span class="meta-value">{{ getEnvironmentLabel(cluster.environment) }}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">{{ $t('clusterManagement.columns.source') }}</span>
+                <span class="meta-value">{{ cluster.source === 'database' ? $t('clusterManagement.sources.database') :
+                  $t('clusterManagement.sources.file') }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="cluster-actions">
+              <el-button type="primary" size="small"
+                :disabled="isCurrentCluster(cluster) || !isAvailable(cluster.status)"
+                @click.stop="handleSetActive(cluster)">
+                {{ $t('clusterManagement.actions.setActive') }}
+              </el-button>
+              <el-popconfirm :title="$t('clusterManagement.messages.deleteConfirm')" @confirm="handleDelete(cluster)"
+                :disabled="cluster.source === 'file'">
+                <template #reference>
+                  <el-button type="danger" size="small" :disabled="cluster.source === 'file'" @click.stop>
+                    {{ $t('common.delete') }}
+                  </el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </div>
         </div>
       </div>
-    </transition>
 
-    <!-- 表格视图 -->
-    <transition name="fade">
-      <el-table
-        v-if="viewMode === 'table'"
-        :data="filteredClusters"
-        v-loading="isLoading"
-        style="width: 100%"
-        :header-cell-style="{ background: '#f5f7fa' }"
-      >
-        <el-table-column prop="name" label="集群名称" min-width="150">
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-weight: 600;">{{ row.name }}</span>
-              <el-tag v-if="row.name === activeClusterName" type="success" size="small" effect="dark">
-                Active
-              </el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="120">
-          <template #default="{ row }">
-            <el-tag :type="getStatusTagType(row.status)" effect="plain">
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="server" label="API 服务器地址" min-width="250" show-overflow-tooltip />
-        <el-table-column prop="version" label="K8s 版本" min-width="120" />
-        <el-table-column prop="environment" label="环境" min-width="100">
-          <template #default="{ row }">
-            <el-tag :type="getEnvironmentType(row.environment)" size="small">
-              {{ row.environment || 'default' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="source" label="来源" min-width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.source === 'database' ? 'primary' : 'info'" effect="plain" size="small">
-              {{ row.source === 'database' ? '数据库' : '文件' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="220" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              type="primary"
-              link
-              :disabled="row.name === activeClusterName || !isAvailable(row.status)"
-              @click="handleSetActive(row)"
-            >
-              设为活动
-            </el-button>
-            <el-button type="primary" link disabled>编辑</el-button>
-            <el-popconfirm
-              title="确定要删除这个集群吗？"
-              @confirm="handleDelete(row)"
-              :disabled="row.source === 'file'"
-            >
-              <template #reference>
-                <span style="margin-left: 10px;">
-                  <el-button
-                    type="danger"
-                    link
-                    :disabled="row.source === 'file'"
-                    title="只能删除通过数据库添加的集群"
-                  >
-                    删除
-                  </el-button>
-                </span>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-    </transition>
+      <!-- 列表视图 -->
+      <div v-else-if="filteredClusters.length > 0 && viewMode === 'list'" class="cluster-table">
+        <el-table :data="filteredClusters" @row-click="handleClusterClick">
+          <el-table-column width="60">
+            <template #default="{ row }">
+              <div class="status-dot" :class="getStatusClass(row.status)"></div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="name" :label="$t('clusterManagement.columns.name')" min-width="150">
+            <template #default="{ row }">
+              <div class="table-cluster-name">
+                {{ row.name }}
+                <el-tag v-if="isCurrentCluster(row)" type="success" size="small" class="active-badge">
+                  {{ $t('clusterManagement.actions.active') }}
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="server" :label="$t('clusterManagement.columns.server')" min-width="200"
+            show-overflow-tooltip>
+            <template #default="{ row }">
+              <code class="server-url">{{ row.server }}</code>
+            </template>
+          </el-table-column>
+          <el-table-column prop="version" :label="$t('clusterManagement.columns.version')" width="120" />
+          <el-table-column prop="environment" :label="$t('clusterManagement.columns.environment')" width="120">
+            <template #default="{ row }">
+              <span v-if="row.environment">{{ getEnvironmentLabel(row.environment) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="source" :label="$t('clusterManagement.columns.source')" width="100">
+            <template #default="{ row }">
+              <span>{{ row.source === 'database' ? $t('clusterManagement.sources.database') :
+                $t('clusterManagement.sources.file') }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('common.actions')" width="200" fixed="right">
+            <template #default="{ row }">
+              <div class="table-actions">
+                <el-button type="primary" size="small" :disabled="isCurrentCluster(row) || !isAvailable(row.status)"
+                  @click.stop="handleSetActive(row)">
+                  {{ $t('clusterManagement.actions.setActive') }}
+                </el-button>
+                <el-popconfirm :title="$t('clusterManagement.messages.deleteConfirm')" @confirm="handleDelete(row)"
+                  :disabled="row.source === 'file'">
+                  <template #reference>
+                    <el-button type="danger" size="small" :disabled="row.source === 'file'" @click.stop>
+                      {{ $t('common.delete') }}
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div v-else-if="!isLoading" class="empty-state">
+        <el-empty :description="$t('clusterManagement.messages.noMatchingClusters')" />
+      </div>
+    </div>
 
     <!-- 添加集群对话框 -->
-    <el-dialog v-model="dialogVisible" title="添加新集群" width="60%" :close-on-click-modal="false">
-      <el-form :model="form" ref="formRef" :rules="rules" label-width="100px">
-        <el-form-item label="集群名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入唯一的集群名称" />
-        </el-form-item>
-        <el-form-item label="环境" prop="environment">
-          <el-select v-model="form.environment" placeholder="选择环境类型" style="width: 100%">
-            <el-option label="生产环境" value="production" />
-            <el-option label="预发布环境" value="staging" />
-            <el-option label="开发环境" value="development" />
-            <el-option label="测试环境" value="testing" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="提供商" prop="provider">
-          <el-input v-model="form.provider" placeholder="例如: minikube, aws, gcp, aliyun" />
-        </el-form-item>
-        <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入集群的描述信息" />
-        </el-form-item>
-        <el-form-item label="Kubeconfig" prop="kubeconfigData">
-          <el-input
-            v-model="form.kubeconfigData"
-            type="textarea"
-            :rows="10"
-            placeholder="请粘贴您的 Kubeconfig 文件内容"
-          />
-        </el-form-item>
+    <el-dialog v-model="dialogVisible" :title="$t('clusterManagement.addCluster')" width="700px"
+      :close-on-click-modal="false" class="cluster-dialog">
+      <el-form :model="form" ref="formRef" :rules="rules" label-width="120px" class="cluster-form">
+        <div class="form-section">
+          <h4 class="section-title">{{ $t('clusterManagement.basicInfo') }}</h4>
+          <el-form-item :label="$t('clusterManagement.form.name')" prop="name">
+            <el-input v-model="form.name" :placeholder="$t('clusterManagement.form.namePlaceholder')" clearable />
+          </el-form-item>
+
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item :label="$t('clusterManagement.form.environment')" prop="environment">
+                <el-select v-model="form.environment" :placeholder="$t('clusterManagement.form.environmentPlaceholder')"
+                  style="width: 100%">
+                  <el-option :label="$t('clusterManagement.environments.production')" value="production" />
+                  <el-option :label="$t('clusterManagement.environments.staging')" value="staging" />
+                  <el-option :label="$t('clusterManagement.environments.development')" value="development" />
+                  <el-option :label="$t('clusterManagement.environments.testing')" value="testing" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item :label="$t('clusterManagement.form.provider')" prop="provider">
+                <el-input v-model="form.provider" :placeholder="$t('clusterManagement.form.providerPlaceholder')"
+                  clearable />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-form-item :label="$t('clusterManagement.form.region')" prop="region">
+            <el-input v-model="form.region" :placeholder="$t('clusterManagement.form.regionPlaceholder')" clearable />
+          </el-form-item>
+
+          <el-form-item :label="$t('clusterManagement.form.description')" prop="description">
+            <el-input v-model="form.description" type="textarea" :rows="3"
+              :placeholder="$t('clusterManagement.form.descriptionPlaceholder')" />
+          </el-form-item>
+        </div>
+
+        <div class="form-section">
+          <h4 class="section-title">{{ $t('clusterManagement.form.kubeconfigTitle') }}</h4>
+          <el-form-item :label="$t('clusterManagement.form.kubeconfig')" prop="kubeconfigData">
+            <div class="kubeconfig-input">
+              <el-input v-model="form.kubeconfigData" type="textarea" :rows="12"
+                :placeholder="$t('clusterManagement.form.kubeconfigPlaceholder')" class="kubeconfig-textarea" />
+              <div class="kubeconfig-tips">
+                <el-alert :title="$t('clusterManagement.form.kubeconfigTips')" type="info" :closable="false"
+                  show-icon />
+              </div>
+            </div>
+          </el-form-item>
+        </div>
       </el-form>
+
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm" :loading="isSubmitting">确定</el-button>
+        <div class="dialog-footer">
+          <el-button @click="dialogVisible = false" size="large">
+            {{ $t('common.cancel') }}
+          </el-button>
+          <el-button type="primary" @click="submitForm" :loading="isSubmitting" size="large">
+            {{ $t('common.confirm') }}
+          </el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -223,18 +228,16 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from "vue"
+import { useI18n } from 'vue-i18n'
 import { type FormInstance, type FormRules, ElMessage } from "element-plus"
 import {
   Plus,
   Search,
   Refresh,
   Grid,
-  List,
-  DataBoard,
-  Select,
-  CircleCheck,
-  Warning
+  List
 } from "@element-plus/icons-vue"
+// 移除未使用的 dayjs 导入
 import {
   getClusterList,
   createCluster,
@@ -244,8 +247,9 @@ import {
   type ClusterInfo,
   type CreateClusterRequest
 } from "@/api/cluster"
-import StatCard from "@/components/cluster/StatCard.vue"
-import ClusterCard from "@/components/cluster/ClusterCard.vue"
+import { getCurrentClusterId, getSavedClusterId } from "@/utils/cluster-context"
+
+const { t } = useI18n()
 
 // 响应式状态
 const clusterList = ref<ClusterInfo[]>([])
@@ -255,36 +259,29 @@ const isSubmitting = ref(false)
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance | null>(null)
 
-// 视图和筛选状态
-const viewMode = ref<'card' | 'table'>('card')
+// 筛选状态
 const searchQuery = ref('')
 const filterEnvironment = ref('')
 const filterStatus = ref('')
+const viewMode = ref<'card' | 'list'>('card')
 
 const form = ref<CreateClusterRequest>({
   name: "",
   kubeconfigData: "",
   provider: "",
   description: "",
-  environment: ""
+  environment: "",
+  region: ""
 })
 
 // 表单验证规则
 const rules: FormRules = {
-  name: [{ required: true, message: "集群名称不能为空", trigger: "blur" }],
-  kubeconfigData: [{ required: true, message: "Kubeconfig 内容不能为空", trigger: "blur" }],
-  environment: [{ required: true, message: "请选择环境类型", trigger: "change" }]
+  name: [{ required: true, message: t('clusterManagement.validation.nameRequired'), trigger: "blur" }],
+  kubeconfigData: [{ required: true, message: t('clusterManagement.validation.kubeconfigRequired'), trigger: "blur" }],
+  environment: [{ required: true, message: t('clusterManagement.validation.environmentRequired'), trigger: "change" }]
 }
 
-// 统计数据
-const stats = computed(() => {
-  const total = clusterList.value.length
-  const active = clusterList.value.filter(c => c.name === activeClusterName.value).length
-  const healthy = clusterList.value.filter(c => c.status.startsWith('可用')).length
-  const unhealthy = total - healthy
-
-  return { total, active, healthy, unhealthy }
-})
+// 移除未使用的统计数据
 
 // 过滤后的集群列表
 const filteredClusters = computed(() => {
@@ -323,12 +320,7 @@ const fetchAllData = async () => {
   }
 }
 
-// 辅助函数：根据状态字符串获取标签类型
-const getStatusTagType = (status: string) => {
-  if (status.startsWith("可用")) return "success"
-  if (status.startsWith("不可用")) return "danger"
-  return "info"
-}
+// 移除未使用的 getStatusTagType 函数
 
 // 辅助函数：根据环境获取标签类型
 const getEnvironmentType = (environment: string | undefined) => {
@@ -342,6 +334,44 @@ const getEnvironmentType = (environment: string | undefined) => {
 
 // 辅助函数：判断集群是否可用
 const isAvailable = (status: string) => status.startsWith("可用")
+
+// 获取状态指示器样式类
+const getStatusClass = (status: string) => {
+  // 只有明确标识为不可用的才显示红色，其他情况都显示绿色（正常）
+  if (status.startsWith("不可用") || status.toLowerCase().includes("error") || status.toLowerCase().includes("failed")) {
+    return "status-unhealthy"
+  }
+  // 发现的集群默认都是正常的（绿色）
+  return "status-healthy"
+}
+
+// 判断是否为当前选中的集群（与导航栏联动）
+const isCurrentCluster = (cluster: ClusterInfo) => {
+  // 优先使用集群上下文中的ID
+  const currentId = getCurrentClusterId() || getSavedClusterId()
+  if (currentId) {
+    return cluster.id === currentId
+  }
+  // 向后兼容：使用名称比较
+  return cluster.name === activeClusterName.value
+}
+
+// 获取环境标签文本
+const getEnvironmentLabel = (environment: string) => {
+  const envMap: Record<string, string> = {
+    production: t('clusterManagement.environments.production'),
+    staging: t('clusterManagement.environments.staging'),
+    development: t('clusterManagement.environments.development'),
+    testing: t('clusterManagement.environments.testing')
+  }
+  return envMap[environment] || environment
+}
+
+// 处理集群点击
+const handleClusterClick = (cluster: ClusterInfo) => {
+  // 可以在这里添加集群详情查看逻辑
+  console.log('Cluster clicked:', cluster)
+}
 
 // 处理操作：设为活动
 const handleSetActive = async (row: ClusterInfo) => {
@@ -377,24 +407,78 @@ const handleOpenDialog = () => {
     kubeconfigData: "",
     provider: "",
     description: "",
-    environment: ""
+    environment: "",
+    region: ""
   }
   dialogVisible.value = true
+}
+
+// 验证 kubeconfig 格式
+const validateKubeconfig = (kubeconfigData: string): boolean => {
+  try {
+    // 检查是否包含必要的 kubeconfig 字段
+    const requiredFields = ['apiVersion', 'clusters', 'contexts', 'users']
+    const hasAllFields = requiredFields.every(field => 
+      kubeconfigData.includes(field + ':') || kubeconfigData.includes('"' + field + '"')
+    )
+    
+    if (!hasAllFields) {
+      ElMessage.error("kubeconfig 格式不正确，缺少必要字段")
+      return false
+    }
+    
+    // 检查是否为空或只有空白字符
+    if (!kubeconfigData.trim()) {
+      ElMessage.error("kubeconfig 不能为空")
+      return false
+    }
+    
+    return true
+  } catch (error) {
+    ElMessage.error("kubeconfig 格式验证失败")
+    return false
+  }
 }
 
 // 处理操作：提交表单
 const submitForm = () => {
   formRef.value?.validate(async (valid) => {
     if (valid) {
+      // 验证 kubeconfig 格式
+      if (!validateKubeconfig(form.value.kubeconfigData)) {
+        return
+      }
+      
       isSubmitting.value = true
       try {
+        console.log('准备发送的数据:', {
+          name: form.value.name,
+          environment: form.value.environment,
+          kubeconfigLength: form.value.kubeconfigData.length
+        })
+        
         await createCluster(form.value)
         ElMessage.success("集群添加成功")
         dialogVisible.value = false
         await fetchAllData()
-      } catch (error) {
+      } catch (error: any) {
         console.error("添加集群失败:", error)
-        ElMessage.error("添加集群失败")
+        console.error("错误详情:", error.response?.data)
+        
+        // 显示更详细的错误信息
+        let errorMsg = "添加集群失败"
+        if (error.response?.data?.message) {
+          errorMsg = error.response.data.message
+        } else if (error.message) {
+          errorMsg = error.message
+        }
+        
+        // 如果是 kubeconfig 相关错误，提供更友好的提示
+        if (errorMsg.includes('kubeconfig') || errorMsg.includes('parse')) {
+          errorMsg += "\n\n请检查：\n1. kubeconfig 格式是否正确\n2. 是否包含完整的集群配置信息\n3. 证书和密钥是否有效"
+        }
+        
+        ElMessage.error(errorMsg)
       } finally {
         isSubmitting.value = false
       }
@@ -409,9 +493,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.cluster-management-container {
+.cluster-management {
   padding: 24px;
-  background: #F0F9FF;
+  background: #f8fafc;
   min-height: 100vh;
 }
 
@@ -423,38 +507,17 @@ onMounted(() => {
   margin-bottom: 24px;
 }
 
-.header-content {
-  flex: 1;
-}
-
 .page-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1D2129;
-  margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #409EFF 0%, #3A8FE8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.page-description {
-  font-size: 14px;
-  color: #4E5969;
+  font-size: 32px;
+  font-weight: 600;
+  color: #1e293b;
   margin: 0;
 }
 
 .header-actions {
   display: flex;
   gap: 12px;
-}
-
-/* 统计卡片网格 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  align-items: center;
 }
 
 /* 工具栏 */
@@ -463,72 +526,308 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-  padding: 20px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.08);
-  border: 1px solid #E8F4FF;
-  flex-wrap: wrap;
-  gap: 16px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
 }
 
-.toolbar-left {
+.search-filters {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
   flex: 1;
+}
+
+.search-input {
+  width: 280px;
+}
+
+.filter-select {
+  width: 160px;
 }
 
 .toolbar-right {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
 }
 
-/* 集群卡片网格 */
-.clusters-grid {
+.cluster-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.count-number {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.count-text {
+  font-weight: 500;
+}
+
+.view-toggle {
+  border-radius: 8px;
+}
+
+/* 集群列表 */
+.cluster-list {
+  min-height: 400px;
+}
+
+.cluster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 20px;
-  min-height: 200px;
+}
+
+.cluster-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.cluster-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #3b82f6;
+}
+
+.cluster-card.active-cluster {
+  border-color: #10b981;
+  border-width: 2px;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.card-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cluster-info {
+  margin-bottom: 12px;
+}
+
+.cluster-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.cluster-server {
+  font-size: 13px;
+  color: #475569;
+  font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.status-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-body {
+  padding: 16px 20px;
+}
+
+.cluster-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.meta-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.meta-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.meta-value {
+  font-size: 13px;
+  color: #1e293b;
+  font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 600;
+}
+
+.card-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #f1f5f9;
+  background: white;
+}
+
+.cluster-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 状态指示器 - 简洁小圆点样式 */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.status-healthy {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.status-unhealthy {
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.status-unknown {
+  background: #64748b;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.2);
+}
+
+/* 集群名称行 */
+.cluster-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.active-badge {
+  margin-left: auto;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  animation: glow-green 2s ease-in-out infinite alternate;
+}
+
+/* 活动集群特殊样式 - 简化颜色，只保留绿色边框 */
+.cluster-card.active-cluster .cluster-name {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+/* 活动标签动画 */
+@keyframes glow-green {
+  0% {
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+  }
+
+  100% {
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.6), 0 0 12px rgba(16, 185, 129, 0.3);
+  }
+}
+
+/* 列表视图 */
+.cluster-table {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.table-cluster-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.server-url {
+  font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .empty-state {
-  grid-column: 1 / -1;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 60px 20px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.08);
-  border: 1px solid #E8F4FF;
+  padding: 80px 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
-/* 过渡动画 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
+/* 对话框样式 */
+.cluster-dialog :deep(.el-dialog__body) {
+  padding: 20px 24px;
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.cluster-form {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.form-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.kubeconfig-input {
+  width: 100%;
+}
+
+.kubeconfig-textarea :deep(.el-textarea__inner) {
+  font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.kubeconfig-tips {
+  margin-top: 12px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 0 0;
+  border-top: 1px solid #e2e8f0;
 }
 
 /* 响应式设计 */
 @media (max-width: 1200px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .clusters-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  .cluster-grid {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   }
 }
 
 @media (max-width: 768px) {
-  .cluster-management-container {
+  .cluster-management {
     padding: 16px;
   }
 
@@ -539,38 +838,50 @@ onMounted(() => {
   }
 
   .page-title {
-    font-size: 24px;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
+    font-size: 28px;
   }
 
   .toolbar {
     flex-direction: column;
     align-items: stretch;
+    gap: 16px;
   }
 
-  .toolbar-left,
-  .toolbar-right {
-    width: 100%;
-  }
-
-  .toolbar-left {
+  .search-filters {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .toolbar-left :deep(.el-input),
-  .toolbar-left :deep(.el-select) {
-    width: 100% !important;
+  .search-input,
+  .filter-select {
+    width: 100%;
   }
 
   .toolbar-right {
     justify-content: space-between;
+    width: 100%;
   }
 
-  .clusters-grid {
+  .cluster-count {
+    text-align: left;
+  }
+
+  .count-text {
+    display: none;
+  }
+
+  .cluster-grid {
     grid-template-columns: 1fr;
+  }
+
+  .meta-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .cluster-actions {
+    flex-direction: column;
   }
 }
 </style>

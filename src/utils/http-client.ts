@@ -97,7 +97,7 @@ function isResourceApiUrl(url: string): boolean {
     // Extensions (deprecated but might still be used)
     /\/apis\/extensions\/v1beta1\//
   ]
-  
+
   return resourceApiPatterns.some(pattern => pattern.test(url))
 }
 
@@ -112,7 +112,7 @@ function logout() {
 export class HttpClient {
   private instance: AxiosInstance
   private responseType: ResponseType
-  
+
   constructor(
     responseType: ResponseType = ResponseType.STANDARD,
     baseConfig: AxiosRequestConfig = {}
@@ -120,10 +120,10 @@ export class HttpClient {
     this.responseType = responseType
     this.instance = axios.create({
       timeout: 10000,
-      baseURL: import.meta.env.DEV ? '' : import.meta.env.VITE_BASE_API,
+      baseURL: import.meta.env.VITE_BASE_API,
       ...baseConfig
     })
-    
+
     this.setupInterceptors()
   }
 
@@ -187,7 +187,7 @@ export class HttpClient {
 
   private handleStandardResponse(data: any) {
     const code = data.code
-    
+
     if (code === undefined) {
       ElMessage.error("响应格式错误：缺少 code 字段")
       return Promise.reject(new Error("响应格式错误"))
@@ -335,7 +335,7 @@ export class HttpClient {
 
 /** 标准 API 客户端（处理带 code 字段的响应） */
 export const standardApiClient = new HttpClient(ResponseType.STANDARD, {
-  timeout: 5000
+  timeout: 20000 // 增加到20秒，为添加集群操作预留更多时间
 })
 
 /** 直接 API 客户端（处理直接返回数据的响应） */

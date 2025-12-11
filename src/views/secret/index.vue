@@ -2,14 +2,14 @@
     <div class="secret-page-container">
       <!-- Breadcrumbs -->
       <el-breadcrumb separator="/" class="page-breadcrumb">
-        <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-        <el-breadcrumb-item>配置管理</el-breadcrumb-item>
-        <el-breadcrumb-item>Secrets</el-breadcrumb-item>
+        <el-breadcrumb-item :to="{ path: '/' }">{{ t('nav.home') }}</el-breadcrumb-item>
+        <el-breadcrumb-item>{{ t('menu.config') }}</el-breadcrumb-item>
+        <el-breadcrumb-item>{{ t('menu.secret') }}</el-breadcrumb-item>
       </el-breadcrumb>
   
       <!-- Header: Title & Create Button -->
       <div class="page-header">
-        <h1 class="page-title">Secrets 列表</h1>
+        <h1 class="page-title">{{ t('secretManagement.title') }}</h1>
          <el-button
            type="primary"
            :icon="PlusIcon"
@@ -17,25 +17,15 @@
            :loading="loading.page"
            :disabled="!selectedNamespace"
          >
-           创建 Secret (YAML)
+           {{ t('secretManagement.create') }}
          </el-button>
       </div>
-  
-       <!-- Cluster Knowledge Alert -->
-       <el-alert
-         title="关于 Secrets"
-         type="warning" 
-         show-icon
-         :closable="true"
-         class="info-alert"
-         description="Secret 用于存储敏感信息，例如密码、OAuth 令牌和 SSH 密钥。 将此类信息放在 Secret 中比放在 Pod 定义或容器镜像中更安全、更灵活。 Pod 可以通过卷挂载或环境变量的方式来使用 Secret。"
-       />
   
       <!-- Filter Bar: Namespace, Search, Refresh -->
       <div class="filter-bar">
           <el-select
               v-model="selectedNamespace"
-              placeholder="请选择命名空间"
+              :placeholder="t('secretManagement.selectNamespace')"
               @change="handleNamespaceChange"
               filterable
               :loading="loading.namespaces"
@@ -45,14 +35,14 @@
               <el-option v-for="ns in namespaces" :key="ns" :label="ns" :value="ns" />
                <template #empty>
                   <div style="padding: 10px; text-align: center; color: #999;">
-                      {{ loading.namespaces ? '正在加载...' : '无可用命名空间' }}
+                      {{ loading.namespaces ? t('common.loading') : t('secretManagement.noNamespace') }}
                   </div>
               </template>
           </el-select>
   
           <el-input
               v-model="searchQuery"
-              placeholder="搜索 Secret 名称 / 类型"
+              :placeholder="t('secretManagement.searchPlaceholder')"
               :prefix-icon="SearchIcon"
               clearable
               @input="handleSearchDebounced"
@@ -83,39 +73,39 @@
           :default-sort="{ prop: 'createdAt', order: 'descending' }"
           row-key="uid"
       >
-          <el-table-column prop="name" label="名称" min-width="300" sortable="custom" fixed show-overflow-tooltip>
+          <el-table-column prop="name" :label="t('common.name')" min-width="300" sortable="custom" fixed show-overflow-tooltip>
                <template #default="{ row }">
                   <el-icon class="secret-icon"><LockIcon /></el-icon>
                   <span class="secret-name">{{ row.name }}</span>
               </template>
           </el-table-column>
-          <el-table-column prop="namespace" label="命名空间" min-width="150" sortable="custom" show-overflow-tooltip />
-          <el-table-column prop="type" label="类型" min-width="200" sortable="custom">
+          <el-table-column prop="namespace" :label="t('common.namespace')" min-width="150" sortable="custom" show-overflow-tooltip />
+          <el-table-column prop="type" :label="t('secretManagement.type')" min-width="200" sortable="custom">
                <template #default="{ row }">
                    <el-tooltip :content="row.type" placement="top">
                       <el-tag size="small" type="info" effect="plain" class="type-tag">{{ formatSecretType(row.type) }}</el-tag>
                    </el-tooltip>
               </template>
           </el-table-column>
-          <el-table-column prop="dataCount" label="数据条目 (Keys)" min-width="150" sortable="custom" align="center">
+          <el-table-column prop="dataCount" :label="t('secretManagement.dataKeys')" min-width="150" sortable="custom" align="center">
               <template #default="{ row }">
                   <el-tag size="small">{{ row.dataCount }}</el-tag>
               </template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" min-width="180" sortable="custom" />
-          <el-table-column label="操作" width="130" align="center" fixed="right">
+          <el-table-column prop="createdAt" :label="t('common.createdAt')" min-width="180" sortable="custom" />
+          <el-table-column :label="t('common.actions')" width="130" align="center" fixed="right">
               <template #default="{ row }">
-                   <el-tooltip content="编辑 YAML" placement="top">
+                   <el-tooltip :content="t('secretManagement.editYaml')" placement="top">
                       <el-button link type="primary" :icon="EditPenIcon" @click="editSecretYaml(row)" />
                   </el-tooltip>
-                  <el-tooltip content="删除" placement="top">
+                  <el-tooltip :content="t('common.delete')" placement="top">
                       <el-button link type="danger" :icon="DeleteIcon" @click="handleDeleteSecret(row)" />
                   </el-tooltip>
               </template>
           </el-table-column>
            <template #empty>
-            <el-empty v-if="!loading.secrets && !selectedNamespace" description="请先选择一个命名空间以加载 Secrets" image-size="100" />
-            <el-empty v-else-if="!loading.secrets && paginatedData.length === 0" :description="`在命名空间 '${selectedNamespace}' 中未找到 Secrets`" image-size="100" />
+            <el-empty v-if="!loading.secrets && !selectedNamespace" :description="t('secretManagement.selectNamespace')" image-size="100" />
+            <el-empty v-else-if="!loading.secrets && paginatedData.length === 0" :description="`${t('secretManagement.noSecretsInNamespace')} '${selectedNamespace}'`" image-size="100" />
            </template>
       </el-table>
   
@@ -137,17 +127,17 @@
       <!-- Create/Edit Dialog (YAML focus) -->
       <el-dialog :title="dialogTitle" v-model="dialogVisible" width="70%" :close-on-click-modal="false">
          <el-alert type="warning" :closable="false" style="margin-bottom: 20px;">
-           <strong>安全警告:</strong> 编辑 Secret 时，`data` 字段中的值应为 Base64 编码格式。 `stringData` 字段允许使用明文字符串（Kubernetes 会自动编码）。请谨慎处理敏感信息。
+           {{ t('secretManagement.securityWarning') }}
          </el-alert>
          <!-- Integrate a YAML editor component here -->
          <div class="yaml-editor-placeholder">
-              YAML 编辑器占位符
+              {{ t('secretManagement.yamlEditorPlaceholder') }}
               <pre>{{ yamlContent || placeholderYaml }}</pre>
          </div>
         <template #footer>
           <div class="dialog-footer">
-              <el-button @click="dialogVisible = false">取 消</el-button>
-              <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">应用 YAML</el-button>
+              <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+              <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">{{ t('secretManagement.applyYaml') }}</el-button>
           </div>
         </template>
       </el-dialog>
@@ -155,19 +145,23 @@
     </div>
   </template>
   
-  <script setup lang="ts">
-  import { ref, reactive, computed, onMounted } from "vue"
-  import { ElMessage, ElMessageBox } from "element-plus"
-  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
-  import dayjs from "dayjs"
-  import { debounce } from 'lodash-es'
-  import yaml from 'js-yaml'; // Ensure installed
-  import { Base64 } from 'js-base64'; // For placeholder
-  
-  import {
-      Plus as PlusIcon, Search as SearchIcon, Refresh as RefreshIcon, Lock as LockIcon, // Icon for Secret
-      EditPen as EditPenIcon, Delete as DeleteIcon
-  } from '@element-plus/icons-vue'
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from "vue"
+import { useI18n } from "vue-i18n"
+import { ElMessage, ElMessageBox } from "element-plus"
+import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
+import dayjs from "dayjs"
+import { debounce } from 'lodash-es'
+import yaml from 'js-yaml'; // Ensure installed
+import { Base64 } from 'js-base64'; // For placeholder
+
+import {
+    Plus as PlusIcon, Search as SearchIcon, Refresh as RefreshIcon, Lock as LockIcon, // Icon for Secret
+    EditPen as EditPenIcon, Delete as DeleteIcon
+} from '@element-plus/icons-vue'
+
+// 设置国际化
+const { t } = useI18n()
   
   // --- Interfaces ---
   // ** Adjusted to match a simplified/flattened API list response **
@@ -230,7 +224,7 @@
   
   // Dialog state (YAML focus)
   const dialogVisible = ref(false)
-  const dialogTitle = ref("创建 Secret (YAML)");
+  const dialogTitle = ref(t('secretManagement.createSecretTitle'));
   // ** Store the DETAILED structure fetched via GET for editing **
   const currentEditSecretDetail = ref<SecretDetailBackend | null>(null);
   const yamlContent = ref("");
@@ -305,9 +299,9 @@
               namespaces.value = response.data.items.map(ns => ns.metadata.name);
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
                    selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
-              } else if (namespaces.value.length === 0) { ElMessage.warning("未找到任何命名空间。"); }
-          } else { ElMessage.error(`获取命名空间失败: ${response.message || '数据格式错误'}`); namespaces.value = []; }
-      } catch (error: any) { console.error("获取命名空间失败:", error); ElMessage.error(`获取命名空间失败: ${error.message || '网络请求失败'}`); namespaces.value = []; }
+              } else if (namespaces.value.length === 0) { ElMessage.warning(t('secretManagement.noNamespaces')); }
+          } else { ElMessage.error(`${t('secretManagement.fetchNamespacesFailed')}: ${response.message || t('secretManagement.dataFormatError')}`); namespaces.value = []; }
+      } catch (error: any) { console.error("获取命名空间失败:", error); ElMessage.error(`${t('secretManagement.fetchNamespacesFailed')}: ${error.message || t('secretManagement.networkError')}`); namespaces.value = []; }
       finally { loading.namespaces = false; }
   }
   
@@ -346,12 +340,12 @@
                console.log(`No Secrets found in namespace '${selectedNamespace.value}' (items is null).`);
                allSecrets.value = []; totalSecrets.value = 0; currentPage.value = 1;
           } else {
-              ElMessage.error(`获取 Secret 数据失败: ${response.message || '无效的响应数据'}`);
+              ElMessage.error(`${t('secretManagement.fetchSecretsError')}: ${response.message || t('secretManagement.invalidResponse')}`);
               allSecrets.value = []; totalSecrets.value = 0;
           }
       } catch (error: any) {
           console.error("获取 Secret 数据失败:", error);
-          ElMessage.error(`获取 Secret 数据出错: ${error.message || '网络请求失败'}`);
+          ElMessage.error(`${t('secretManagement.fetchSecretsError')}: ${error.message || t('secretManagement.networkError')}`);
           allSecrets.value = []; totalSecrets.value = 0;
       } finally {
           loading.secrets = false;
@@ -367,10 +361,10 @@
   
   
   // --- Dialog and CRUD Actions ---
-  const handleAddSecret = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning("请先选择一个命名空间"); return; } currentEditSecretDetail.value = null; yamlContent.value = placeholderYaml.value; dialogTitle.value = "创建 Secret (YAML)"; dialogVisible.value = true; };
+  const handleAddSecret = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning(t('secretManagement.selectNamespace')); return; } currentEditSecretDetail.value = null; yamlContent.value = placeholderYaml.value; dialogTitle.value = t('secretManagement.createSecretTitle'); dialogVisible.value = true; };
   
   const editSecretYaml = async (secret: SecretDisplayItem) => {
-      ElMessage.info(`获取 Secret "${secret.name}" 的详细信息...`);
+      ElMessage.info(t('secretManagement.fetchingYaml', { name: secret.name }));
       loading.secrets = true; // Indicate loading
       currentEditSecretDetail.value = null; // Clear previous edit data
       yamlContent.value = ""; // Clear previous yaml
@@ -406,14 +400,14 @@
   
   
               yamlContent.value = yaml.dump(k8sObjectForYaml, { skipInvalid: true, sortKeys: false }); // Don't sort keys for K8s objects
-              dialogTitle.value = `编辑 Secret: ${secret.name} (YAML)`;
+              dialogTitle.value = `${t('secretManagement.editSecretTitle')}: ${secret.name} (YAML)`;
               dialogVisible.value = true;
          } else {
-             ElMessage.error(`获取 Secret 详情失败: ${response.message || '未知错误'}`);
+             ElMessage.error(`${t('secretManagement.fetchSecretDetailsFailed')}: ${response.message || t('secretManagement.unknownError')}`);
          }
       } catch (error: any) {
           console.error("获取 Secret 详情失败:", error);
-          ElMessage.error(`获取 Secret 详情出错: ${error.message || '网络请求失败'}`);
+          ElMessage.error(`${t('secretManagement.fetchSecretDetailsFailed')}: ${error.message || t('secretManagement.networkError')}`);
       } finally {
          loading.secrets = false;
       }
@@ -422,7 +416,7 @@
   const handleSaveYaml = async () => { /* ... */
       // Determine namespace
       const namespaceToUse = currentEditSecretDetail.value?.metadata?.namespace || selectedNamespace.value;
-      if (!namespaceToUse) { ElMessage.error("无法确定目标命名空间。"); return; }
+      if (!namespaceToUse) { ElMessage.error(t('secretManagement.cannotDetermineNamespace')); return; }
   
       loading.dialogSave = true;
       // --- Replace with actual YAML editor interaction and API call ---
@@ -440,14 +434,14 @@
   
        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate
        loading.dialogSave = false; dialogVisible.value = false;
-       const action = currentEditSecretDetail.value ? '更新' : '创建';
-       ElMessage.success(`模拟 Secret ${action}成功`); fetchSecretData();
+       const action = currentEditSecretDetail.value ? t('secretManagement.update') : t('secretManagement.create');
+       ElMessage.success(t('secretManagement.operationSuccess', { action })); fetchSecretData();
   };
   
   const handleDeleteSecret = (secret: SecretDisplayItem) => { /* ... */
       ElMessageBox.confirm(
-          `确定要删除 Secret "${secret.name}" (命名空间: ${secret.namespace}) 吗？`,
-          '确认删除', { type: 'warning' }
+          t('secretManagement.deleteConfirmDetail', { name: secret.name, namespace: secret.namespace }),
+          t('secretManagement.confirmDelete'), { type: 'warning' }
       ).then(async () => {
           loading.secrets = true;
           try {
@@ -456,10 +450,10 @@
                   method: "delete"
               });
                if (response.code === 200 || response.code === 204 || response.code === 202) {
-                  ElMessage.success(`Secret "${secret.name}" 已删除`); await fetchSecretData();
-              } else { ElMessage.error(`删除 Secret 失败: ${response.message || '未知错误'}`); loading.secrets = false; }
-          } catch (error: any) { console.error("删除 Secret 失败:", error); ElMessage.error(`删除 Secret 失败: ${error.response?.data?.message || error.message || '请求失败'}`); loading.secrets = false; }
-      }).catch(() => ElMessage.info('删除操作已取消'));
+                  ElMessage.success(t('secretManagement.deleteSuccess', { name: secret.name })); await fetchSecretData();
+              } else { ElMessage.error(`${t('secretManagement.deleteFailed')}: ${response.message || t('secretManagement.unknownError')}`); loading.secrets = false; }
+          } catch (error: any) { console.error("删除 Secret 失败:", error); ElMessage.error(`${t('secretManagement.deleteFailed')}: ${error.response?.data?.message || error.message || t('secretManagement.requestFailed')}`); loading.secrets = false; }
+      }).catch(() => ElMessage.info(t('secretManagement.deleteCanceled')));
   };
   
   // --- Lifecycle Hooks ---

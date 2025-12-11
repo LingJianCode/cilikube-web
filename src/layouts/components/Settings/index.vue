@@ -1,11 +1,14 @@
 <script lang="ts" setup>
 import { watchEffect } from "vue"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { useSettingsStore } from "@/store/modules/settings"
 import { useLayoutMode } from "@/hooks/useLayoutMode"
 import { resetConfigLayout } from "@/utils"
 import SelectLayoutMode from "./SelectLayoutMode.vue"
 import { Refresh } from "@element-plus/icons-vue"
+
+const { t } = useI18n()
 
 const { isLeft } = useLayoutMode()
 const settingsStore = useSettingsStore()
@@ -29,19 +32,19 @@ const {
 
 /** 定义 switch 设置项 */
 const switchSettings = {
-  显示标签栏: showTagsView,
-  "显示 Logo": showLogo,
-  "固定 Header": fixedHeader,
-  "显示页脚 Footer": showFooter,
-  显示消息通知: showNotify,
-  显示切换主题按钮: showThemeSwitch,
-  显示全屏按钮: showScreenfull,
-  显示搜索按钮: showSearchMenu,
-  显示字体选择器: showFontSelector,
-  是否缓存标签栏: cacheTagsView,
-  开启系统水印: showWatermark,
-  显示灰色模式: showGreyMode,
-  显示色弱模式: showColorWeakness
+  [t('settings.layout.showTagsView')]: showTagsView,
+  [t('settings.layout.showLogo')]: showLogo,
+  [t('settings.layout.fixedHeader')]: fixedHeader,
+  [t('settings.layout.showFooter')]: showFooter,
+  [t('settings.layout.showNotify')]: showNotify,
+  [t('settings.layout.showThemeSwitch')]: showThemeSwitch,
+  [t('settings.layout.showScreenfull')]: showScreenfull,
+  [t('settings.layout.showSearchMenu')]: showSearchMenu,
+  [t('settings.layout.showFontSelector')]: showFontSelector,
+  [t('settings.layout.cacheTagsView')]: cacheTagsView,
+  [t('settings.layout.showWatermark')]: showWatermark,
+  [t('settings.layout.showGreyMode')]: showGreyMode,
+  [t('settings.layout.showColorWeakness')]: showColorWeakness
 }
 
 /** 非左侧模式时，Header 都是 fixed 布局 */
@@ -52,15 +55,15 @@ watchEffect(() => {
 
 <template>
   <div class="setting-container">
-    <h4>布局配置</h4>
+    <h4>{{ t('settings.layout.title') }}</h4>
     <SelectLayoutMode />
     <el-divider />
-    <h4>功能配置</h4>
+    <h4>{{ t('settings.features.title') }}</h4>
     <div class="setting-item" v-for="(settingValue, settingName, index) in switchSettings" :key="index">
       <span class="setting-name">{{ settingName }}</span>
-      <el-switch v-model="settingValue.value" :disabled="!isLeft && settingName === '固定 Header'" />
+      <el-switch v-model="settingValue.value" :disabled="!isLeft && settingName === t('settings.layout.fixedHeader')" />
     </div>
-    <el-button type="danger" :icon="Refresh" @click="resetConfigLayout">重 置</el-button>
+    <el-button type="danger" :icon="Refresh" @click="resetConfigLayout">{{ t('settings.reset') }}</el-button>
   </div>
 </template>
 

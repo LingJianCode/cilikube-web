@@ -1,1018 +1,1073 @@
 <template>
-    <div class="pod-page-container">
-      <!-- Breadcrumbs -->
-      <el-breadcrumb separator="/" class="page-breadcrumb">
-        <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-        <el-breadcrumb-item>资源管理</el-breadcrumb-item>
-        <el-breadcrumb-item>Pods</el-breadcrumb-item>
-      </el-breadcrumb>
-  
-      <!-- Header: Title & Create Button -->
-      <div class="page-header">
-        <h1 class="page-title">Pods 列表</h1>
-        <el-button
-          type="primary"
-          :icon="PlusIcon"
-          @click="handleAddPod"
-          :disabled="!selectedNamespace || loading.page"
-        >
-          创建 Pod (YAML)
-        </el-button>
-      </div>
-  
-      <!-- Cluster Knowledge Alert -->
-      <el-alert
-        title="关于 Pods"
-        type="info"
-        show-icon
-        :closable="true"
-        class="info-alert"
-        description="在 Kubernetes 中，Pod 是最小的可部署单元。一个 Pod 表示一个运行中的进程，通常包含一个或多个容器。Pod 提供了容器之间共享的网络和存储资源，并规定了这些容器应如何运行。"
-      />
-  
-      <!-- Filter Bar: Namespace, Search, Refresh -->
-      <div class="filter-bar">
-         <el-select
-             v-model="selectedNamespace"
-             placeholder="请选择命名空间"
-             @change="handleNamespaceChange"
-             filterable
-             :loading="loading.namespaces"
-             class="filter-item namespace-select"
-             style="width: 280px;"
-         >
-             <el-option v-for="ns in namespaces" :key="ns" :label="ns" :value="ns" />
-              <template #empty>
-                 <div style="padding: 10px; text-align: center; color: #999;">
-                     {{ loading.namespaces ? '正在加载...' : '无可用命名空间' }}
-                 </div>
-             </template>
-         </el-select>
-  
-         <el-input
-             v-model="searchQuery"
-             placeholder="搜索 Pod 名称 / IP / 节点 / 状态"
-             :prefix-icon="SearchIcon"
-             clearable
-             @input="handleSearchDebounced"
-             class="filter-item search-input"
-             :disabled="!selectedNamespace || loading.pods"
-         />
-  
-         <el-tooltip content="刷新列表" placement="top">
-             <el-button
-               :icon="RefreshIcon"
-               circle
-               @click="fetchPodData"
-               :loading="loading.pods"
-               :disabled="!selectedNamespace"
-             />
-         </el-tooltip>
-      </div>
-  
-      <!-- Pods Table -->
-      <el-table
-        :data="paginatedData"
-        v-loading="loading.pods"
-        border
-        stripe
-        style="width: 100%"
-        @sort-change="handleSortChange"
-        class="pod-table"
-        :default-sort="{ prop: 'createdAt', order: 'descending' }"
-        row-key="uid"
-      >
-        <!-- Columns -->
-         <el-table-column prop="name" label="名称" min-width="250" sortable="custom" fixed show-overflow-tooltip>
-            <template #default="{ row }">
-               <el-icon class="pod-icon"><Tickets /></el-icon>
-               <span class="pod-name">{{ row.name }}</span>
-           </template>
-       </el-table-column>
-       <el-table-column prop="namespace" label="命名空间" min-width="150" sortable="custom" show-overflow-tooltip />
-       <el-table-column prop="status" label="状态" min-width="130" sortable="custom" align="center">
-           <template #default="{ row }">
-               <el-tooltip placement="top" :disabled="!row.reason && !row.message">
-                   <template #content>
-                       <div v-if="row.reason">Reason: {{ row.reason }}</div>
-                       <div v-if="row.message">Message: {{ row.message }}</div>
-                   </template>
-                   <el-tag :type="getStatusTagType(row.status)" size="small" effect="light" class="status-tag">
-                       <el-icon class="status-icon" :class="getSpinClass(row.status)">
-                           <component :is="getStatusIcon(row.status)" />
-                       </el-icon>
-                       {{ row.status }}
-                   </el-tag>
-               </el-tooltip>
-           </template>
-       </el-table-column>
-       <el-table-column prop="ip" label="Pod IP" min-width="150" sortable="custom" show-overflow-tooltip />
-       <el-table-column prop="node" label="所在节点" min-width="180" sortable="custom" show-overflow-tooltip />
-       <!-- FIXED: Apply formatting only for display -->
-       <el-table-column prop="createdAt" label="创建时间" min-width="180" sortable="custom">
-          <template #default="{ row }">
-              {{ formatTimestamp(row.createdAt) }}
-          </template>
-       </el-table-column>
-  
-        <el-table-column label="操作" width="180" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-tooltip content="查看日志" placement="top">
-              <el-button link type="primary" :icon="DocumentIcon" @click="handleViewLogs(row)" />
-            </el-tooltip>
-            <el-tooltip content="进入容器" placement="top">
-              <el-button link type="primary" :icon="MonitorIcon" @click="handleExec(row)" />
-            </el-tooltip>
-            <el-tooltip content="编辑 YAML" placement="top">
-              <el-button link type="primary" :icon="EditPenIcon" @click="handleEditPod(row)" />
-            </el-tooltip>
-            <el-tooltip content="删除" placement="top">
-              <el-button link type="danger" :icon="DeleteIcon" @click="handleDeletePod(row)" />
-            </el-tooltip>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <!-- FIXED: Use v-bind for image-size -->
-          <el-empty v-if="!loading.pods && !selectedNamespace" description="请先选择一个命名空间以加载 Pods" :image-size="100" />
-          <el-empty v-else-if="!loading.pods && filteredData.length === 0 && searchQuery" description="未找到匹配的 Pods" :image-size="100" />
-          <el-empty v-else-if="!loading.pods && allPods.length === 0" :description="`在命名空间 '${selectedNamespace}' 中未找到 Pods`" :image-size="100" />
-         </template>
-      </el-table>
-  
-      <!-- Pagination -->
-      <!-- Use totalFilteredPods for client-side pagination total -->
-      <div class="pagination-container" v-if="!loading.pods && totalFilteredPods > 0">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="totalFilteredPods"
-          layout="total, sizes, prev, pager, next, jumper"
-          background
-          @size-change="handleSizeChange"
-          @current-change="handlePageChange"
-          :disabled="loading.pods"
-        />
-      </div>
-  
-      <!-- Create/Edit Pod Dialog -->
-      <el-dialog
-          :title="isEditMode ? `编辑 Pod YAML: ${editingPodName}` : '创建 Pod (YAML)'"
-          v-model="yamlDialogConfig.visible"
-          width="70%"
-          :close-on-click-modal="false"
-          @closed="handleYamlDialogClose"
-      >
-        <el-alert type="info" :closable="false" style="margin-bottom: 15px;">
-          建议通过 Deployment 等控制器管理 Pod。直接操作 Pod 常用于调试。确保 YAML 中的 `namespace` (如果提供) 与当前选定命名空间 (`${selectedNamespace || '未选定'}`) 匹配。
-        </el-alert>
-        <div class="yaml-editor-container" style="height: 50vh;">
-          <!-- Monaco Editor Component -->
-          <vue-monaco-editor
-            v-if="yamlDialogConfig.visible"
-            v-model:value="yamlDialogConfig.content"
-            theme="vs-dark"
-            language="yaml"
-            :options="{ minimap: { enabled: false }, scrollBeyondLastLine: false, automaticLayout: true }"
-            style="height: 100%; border: 1px solid #eee;"
-          />
+    <div class="pod-management">
+        <!-- 页面头部 -->
+        <div class="page-header">
+            <h1 class="page-title">{{ $t('podManagement.title') }}</h1>
+            <div class="header-actions">
+                <el-button :icon="Refresh" @click="fetchPodData" :loading="loading.pods" circle />
+                <el-button type="primary" :icon="Plus" @click="handleAddPod" :disabled="!selectedNamespace">
+                    {{ $t('podManagement.actions.create') }}
+                </el-button>
+            </div>
         </div>
-        <template #footer>
-          <div class="dialog-footer">
-            <el-button @click="yamlDialogConfig.visible = false">取 消</el-button>
-            <el-button type="primary" @click="handleSaveYaml" :loading="yamlDialogConfig.saving">
-              {{ isEditMode ? '更新 YAML' : '应用 YAML' }}
-            </el-button>
-          </div>
-        </template>
-      </el-dialog>
-  
-       <!-- View Logs Dialog -->
-       <el-dialog
-           title="查看 Pod 日志"
-           v-model="logDialogConfig.visible"
-           width="75%"
-           :close-on-click-modal="false"
-           @closed="handleLogDialogClose"
-           top="5vh"
-           class="log-dialog"
-           destroy-on-close
-       >
-           <div v-if="logDialogConfig.targetPod">
-               <el-form :inline="true" size="small" class="log-options-form">
-                   <el-form-item label="Pod">
-                      <strong>{{ logDialogConfig.targetPod.name }}</strong> ({{ logDialogConfig.targetPod.namespace }})
-                   </el-form-item>
-                   <el-form-item label="容器" required>
-                       <el-select
-                           v-model="logDialogConfig.selectedContainer"
-                           placeholder="请选择容器"
-                           style="width: 200px;"
-                           :disabled="logDialogConfig.loadingContainers"
-                           clearable
-                           @change="fetchLogs"
-                           filterable
-                       >
-                           <el-option
-                               v-for="container in logDialogConfig.containers"
-                               :key="container.name"
-                               :label="container.name"
-                               :value="container.name"
-                           />
-                            <template #empty>
-                                <div style="padding: 10px; text-align: center; color: #999;">
-                                    {{ logDialogConfig.loadingContainers ? '加载中...' : '无可用容器' }}
-                                </div>
-                            </template>
-                       </el-select>
-                   </el-form-item>
-                   <el-form-item label="显示行数">
-                       <el-input-number
-                           v-model="logDialogConfig.tailLines"
-                           :min="10"
-                           :max="10000"
-                           :step="100"
-                           controls-position="right"
-                           style="width: 130px;"
-                           placeholder="默认全部"
-                           clearable
-                           :disabled="!logDialogConfig.selectedContainer || logDialogConfig.follow"
-                           @change="fetchLogs"
-                       />
-                   </el-form-item>
-                   <el-form-item>
-                      <el-button type="primary" :icon="RefreshIcon" @click="fetchLogs" :loading="logDialogConfig.loadingLogs" :disabled="!logDialogConfig.selectedContainer">刷新</el-button>
-                   </el-form-item>
-               </el-form>
-  
-               <div class="log-display-container">
-                  <pre v-loading="logDialogConfig.loadingLogs" class="log-content">{{ logDialogConfig.content || (logDialogConfig.selectedContainer ? (logDialogConfig.loadingLogs ? '正在加载日志...' : '请点击刷新加载日志') : '请先选择一个容器') }}</pre>
-               </div>
-  
-           </div>
-           <template #footer>
-               <span class="dialog-footer">
-                   <el-button @click="logDialogConfig.visible = false">关 闭</el-button>
-               </span>
-           </template>
-       </el-dialog>
-  
-       <!-- Exec into Container Dialog -->
-      <el-dialog
-          title="进入 Pod 容器终端"
-          v-model="execDialogConfig.visible"
-          width="75%"
-          :close-on-click-modal="false"
-          @opened="initTerminal"
-          @closed="handleExecDialogClose"
-          top="5vh"
-          class="exec-dialog"
-          destroy-on-close
-      >
-           <div v-if="execDialogConfig.targetPod">
-               <el-form :inline="true" size="small" style="margin-bottom: 10px;">
-                    <el-form-item label="Pod">
-                       <strong>{{ execDialogConfig.targetPod.name }}</strong> ({{ execDialogConfig.targetPod.namespace }})
-                    </el-form-item>
-                   <el-form-item label="容器" required>
-                       <el-select
-                           v-model="execDialogConfig.selectedContainer"
-                           placeholder="请选择容器"
-                           style="width: 200px;"
-                           :disabled="execDialogConfig.loadingContainers || execDialogConfig.connected"
-                           clearable
-                           filterable
-                       >
-                            <el-option
-                                v-for="container in execDialogConfig.containers"
-                                :key="container.name"
-                                :label="container.name"
-                                :value="container.name"
-                            />
-                             <template #empty>
-                                 <div style="padding: 10px; text-align: center; color: #999;">
-                                     {{ execDialogConfig.loadingContainers ? '加载中...' : '无可用容器' }}
-                                 </div>
-                             </template>
-                       </el-select>
-                   </el-form-item>
-                    <el-form-item label="命令">
-                         <el-input v-model="execDialogConfig.command" style="width: 150px;" placeholder="默认 sh" :disabled="execDialogConfig.connected"/>
-                    </el-form-item>
-                    <el-form-item>
-                       <el-button
-                          type="primary"
-                          @click="connectWebSocket"
-                          :loading="execDialogConfig.connecting"
-                          :disabled="!execDialogConfig.selectedContainer || execDialogConfig.connected">
-                           {{ execDialogConfig.connected ? '已连接' : '连 接' }}
-                       </el-button>
-                       <el-button @click="disconnectWebSocket" v-if="execDialogConfig.connected">断开连接</el-button>
-                    </el-form-item>
-                    <el-form-item v-if="execDialogConfig.statusText">
-                         <span :class="`status-text status-${execDialogConfig.statusType}`">{{ execDialogConfig.statusText }}</span>
-                    </el-form-item>
-               </el-form>
-  
-              <!-- Terminal Container -->
-              <div ref="terminalContainerRef" class="terminal-container"></div>
-  
-           </div>
-           <template #footer>
-               <span class="dialog-footer">
-                   <el-button @click="execDialogConfig.visible = false">关 闭</el-button>
-               </span>
-           </template>
-       </el-dialog>
-  
+
+        <!-- 命名空间选择提示 -->
+        <el-alert v-if="!selectedNamespace && !loading.namespaces" :title="$t('podManagement.messages.selectNamespace')"
+            type="info" show-icon :closable="false" style="margin-bottom: 24px;" />
+
+        <!-- 工具栏 -->
+        <div class="toolbar" v-if="selectedNamespace">
+            <div class="search-filters">
+                <el-select v-model="selectedNamespace" :placeholder="$t('podManagement.filterNamespace')" filterable
+                    :loading="loading.namespaces" class="namespace-select">
+                    <el-option :label="$t('podManagement.allNamespaces')" value="__ALL__" />
+                    <el-option v-for="ns in namespaces" :key="ns" :label="ns" :value="ns" />
+                </el-select>
+                <el-input v-model="searchQuery" :placeholder="$t('podManagement.searchPlaceholder')"
+                    :prefix-icon="Search" clearable class="search-input" @input="handleSearchDebounced" />
+                <el-select v-model="filterStatus" :placeholder="$t('podManagement.filterStatus')" clearable
+                    class="filter-select">
+                    <el-option :label="$t('podManagement.allStatuses')" value="" />
+                    <el-option :label="$t('podManagement.statuses.running')" value="running" />
+                    <el-option :label="$t('podManagement.statuses.pending')" value="pending" />
+                    <el-option :label="$t('podManagement.statuses.failed')" value="failed" />
+                    <el-option :label="$t('podManagement.statuses.succeeded')" value="succeeded" />
+                </el-select>
+            </div>
+            <div class="toolbar-right">
+                <el-button-group class="view-toggle">
+                    <el-button :type="viewMode === 'card' ? 'primary' : ''" :icon="Grid" @click="viewMode = 'card'" />
+                    <el-button :type="viewMode === 'list' ? 'primary' : ''" :icon="List" @click="viewMode = 'list'" />
+                </el-button-group>
+            </div>
+        </div>
+
+        <!-- Pod 列表 -->
+        <div class="pod-list" v-loading="loading.pods">
+            <!-- 卡片视图 -->
+            <div v-if="filteredPods.length > 0 && viewMode === 'card'" class="pod-grid">
+                <div v-for="pod in paginatedData" :key="pod.uid" class="pod-card" @click="handlePodClick(pod)">
+                    <div class="card-header">
+                        <div class="pod-info">
+                            <div class="pod-name-row">
+                                <div class="status-dot" :class="getStatusClass(pod.status)"></div>
+                                <div class="pod-name">{{ pod.name }}</div>
+                            </div>
+                            <div class="pod-namespace">{{ pod.namespace }}</div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="pod-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">{{ $t('podManagement.columns.status') }}</span>
+                                <span class="meta-value">{{ getStatusText(pod.status) }}</span>
+                            </div>
+                            <div class="meta-item" v-if="pod.ip">
+                                <span class="meta-label">{{ $t('podManagement.columns.ip') }}</span>
+                                <span class="meta-value">{{ pod.ip }}</span>
+                            </div>
+                            <div class="meta-item" v-if="pod.node">
+                                <span class="meta-label">{{ $t('podManagement.columns.node') }}</span>
+                                <span class="meta-value">{{ pod.node }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">{{ $t('podManagement.columns.created') }}</span>
+                                <span class="meta-value">{{ formatTimestamp(pod.createdAt) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer">
+                        <div class="pod-actions">
+                            <el-button type="primary" size="small" @click.stop="handleViewLogs(pod)">
+                                {{ $t('podManagement.actions.viewLogs') }}
+                            </el-button>
+                            <el-button type="success" size="small" @click.stop="handleExec(pod)">
+                                {{ $t('podManagement.actions.exec') }}
+                            </el-button>
+                            <el-button type="danger" size="small" @click.stop="handleDeletePod(pod)">
+                                {{ $t('podManagement.actions.delete') }}
+                            </el-button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 列表视图 -->
+            <div v-else-if="filteredPods.length > 0 && viewMode === 'list'" class="pod-table">
+                <el-table :data="paginatedData" @row-click="handlePodClick">
+                    <el-table-column width="60">
+                        <template #default="{ row }">
+                            <div class="status-dot" :class="getStatusClass(row.status)"></div>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="name" :label="$t('podManagement.columns.name')" min-width="200">
+                        <template #default="{ row }">
+                            <div class="table-pod-name">{{ row.name }}</div>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="namespace" :label="$t('podManagement.columns.namespace')" width="150" />
+                    <el-table-column :label="$t('podManagement.columns.status')" width="120">
+                        <template #default="{ row }">
+                            <span>{{ getStatusText(row.status) }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="ip" :label="$t('podManagement.columns.ip')" width="140">
+                        <template #default="{ row }">
+                            <code class="ip-address" v-if="row.ip">{{ row.ip }}</code>
+                            <span v-else>-</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="node" :label="$t('podManagement.columns.node')" min-width="180"
+                        show-overflow-tooltip />
+                    <el-table-column :label="$t('podManagement.columns.created')" width="180">
+                        <template #default="{ row }">
+                            <span>{{ formatTimestamp(row.createdAt) }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column :label="$t('common.actions')" width="240" fixed="right">
+                        <template #default="{ row }">
+                            <div class="table-actions">
+                                <el-button type="primary" size="small" @click.stop="handleViewLogs(row)">
+                                    {{ $t('podManagement.actions.viewLogs') }}
+                                </el-button>
+                                <el-button type="success" size="small" @click.stop="handleExec(row)">
+                                    {{ $t('podManagement.actions.exec') }}
+                                </el-button>
+                                <el-button type="danger" size="small" @click.stop="handleDeletePod(row)">
+                                    {{ $t('podManagement.actions.delete') }}
+                                </el-button>
+                            </div>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+
+            <div v-else-if="!loading.pods && selectedNamespace" class="empty-state">
+                <el-empty :description="searchQuery || filterStatus ?
+                    $t('podManagement.messages.noMatchingPods') :
+                    $t('podManagement.messages.noPods')" />
+            </div>
+        </div>
+
+        <!-- 分页 -->
+        <div class="pagination-container" v-if="filteredPods.length > pageSize">
+            <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize"
+                :page-sizes="[12, 24, 36, 48]" :total="filteredPods.length"
+                layout="total, sizes, prev, pager, next, jumper" background @size-change="handleSizeChange"
+                @current-change="handlePageChange" />
+        </div>
+
+        <!-- 创建 Pod 对话框 -->
+        <el-dialog v-model="yamlDialogConfig.visible" :title="$t('podManagement.form.createFromYaml')" width="70%"
+            :close-on-click-modal="false" @closed="handleYamlDialogClose" class="yaml-dialog">
+            <div class="yaml-editor-container">
+                <el-input v-model="yamlDialogConfig.content" type="textarea" :rows="20"
+                    :placeholder="$t('podManagement.form.yamlContent')" />
+            </div>
+            <template #footer>
+                <div class="dialog-footer">
+                    <el-button @click="yamlDialogConfig.visible = false" size="large">
+                        {{ $t('common.cancel') }}
+                    </el-button>
+                    <el-button type="primary" @click="handleSaveYaml" :loading="yamlDialogConfig.saving" size="large">
+                        {{ $t('common.confirm') }}
+                    </el-button>
+                </div>
+            </template>
+        </el-dialog>
+
+        <!-- 查看日志对话框 -->
+        <el-dialog v-model="logDialogConfig.visible" :title="$t('podManagement.actions.viewLogs')" width="80%"
+            :close-on-click-modal="false" @closed="handleLogDialogClose" class="log-dialog">
+            <div style="height: 70vh;">
+                <PodLogs v-if="logDialogConfig.targetPod" :namespace="logDialogConfig.targetPod.namespace"
+                    :pod-name="logDialogConfig.targetPod.name" :containers="logDialogConfig.containers"
+                    ref="podLogsRef" />
+            </div>
+            <template #footer>
+                <div class="dialog-footer">
+                    <el-button @click="logDialogConfig.visible = false" size="large">
+                        {{ $t('common.cancel') }}
+                    </el-button>
+                </div>
+            </template>
+        </el-dialog>
+
+        <!-- 进入容器对话框 -->
+        <el-dialog v-model="execDialogConfig.visible" :title="$t('podManagement.actions.exec')" width="80%"
+            :close-on-click-modal="false" @closed="handleExecDialogClose" class="exec-dialog">
+            <div style="height: 70vh;">
+                <PodTerminal v-if="execDialogConfig.targetPod" :namespace="execDialogConfig.targetPod.namespace"
+                    :pod-name="execDialogConfig.targetPod.name" :containers="execDialogConfig.containers"
+                    ref="podTerminalRef" />
+            </div>
+            <template #footer>
+                <div class="dialog-footer">
+                    <el-button @click="execDialogConfig.visible = false" size="large">
+                        {{ $t('common.cancel') }}
+                    </el-button>
+                </div>
+            </template>
+        </el-dialog>
     </div>
-  </template>
-  
-  <script setup lang="ts">
-  import { ref, reactive, computed, onMounted, watch, nextTick, onBeforeUnmount, markRaw } from "vue"; // Import markRaw
-  import { ElMessage, ElMessageBox } from "element-plus";
-  import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config";
-  import dayjs from "dayjs";
-  import { debounce } from 'lodash-es';
-  // Standard import for vue-monaco-editor
-  import VueMonacoEditor from '@guolao/vue-monaco-editor';
-  // Standard imports for xterm
-  import { Terminal } from 'xterm';
-  import { FitAddon } from 'xterm-addon-fit';
-  import 'xterm/css/xterm.css';
-  
-  
-  import {
-      Plus as PlusIcon, Search as SearchIcon, Refresh as RefreshIcon, Tickets,
-      CircleCheckFilled, WarningFilled, CloseBold, Loading as LoadingIcon,
-      QuestionFilled, Document as DocumentIcon, Monitor as MonitorIcon,
-      EditPen as EditPenIcon, Delete as DeleteIcon
-  } from '@element-plus/icons-vue';
-  
-  // --- Constants ---
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-  const wsHostPort = window.location.host;
-  const WS_BASE_URL = `${wsProtocol}${wsHostPort}`;
-  
-  // --- Interfaces (Ensure they match backend and usage) ---
-  interface K8sContainer { name: string; image: string; [key: string]: any; }
-  interface PodSpec { containers: K8sContainer[]; initContainers?: K8sContainer[]; [key: string]: any; }
-  interface PodDetail {
-    name: string; namespace: string; uid: string; spec: PodSpec;
-    status?: { phase?: string; containerStatuses?: Array<{ name: string; ready: boolean; state: any }>; initContainerStatuses?: Array<{ name: string; ready: boolean; state: any }>; };
-    [key: string]: any;
-  }
-  interface PodDetailApiResponse { code: number; data: PodDetail; message: string; }
-  interface PodApiItem {
-    uid: string; name: string; namespace: string;
-    labels?: { [key: string]: string }; annotations?: { [key: string]: string } | null;
-    status: string; reason?: string; message?: string;
-    ip?: string; node?: string; createdAt: string; // Expect ISO string
-  }
-  interface PodListApiResponseData { items: PodApiItem[]; total: number }
-  interface PodApiResponse { code: number; data: PodListApiResponseData; message: string }
-  interface PodDisplayItem extends PodApiItem {} // Extend if needed for frontend state
-  interface NamespaceListResponse { code: number; data: string[]; message: string }
-  interface YamlApiResponse { code: number; data: string; message: string; }
-  
-  // --- Reactive State ---
-  const allPods = ref<PodDisplayItem[]>([]);
-  const namespaces = ref<string[]>([]);
-  const selectedNamespace = ref<string>("");
-  const currentPage = ref(1);
-  const pageSize = ref(10);
-  // Removed totalPods as it's derived client-side now via totalFilteredPods
-  const searchQuery = ref("");
-  const sortParams = reactive({ key: 'createdAt', order: 'descending' as ('ascending' | 'descending' | null) });
-  
-  const loading = reactive({ page: false, namespaces: false, pods: false });
-  
-  // --- Create/Edit Dialog State ---
-  const isEditMode = ref(false);
-  const editingPodName = ref<string | null>(null);
-  const yamlDialogConfig = reactive({ visible: false, content: '', saving: false });
-  const placeholderYaml = computed(() => `apiVersion: v1
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, reactive, watch, nextTick } from "vue"
+import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from "element-plus"
+import { kubernetesRequest, fetchNamespaces } from "@/utils/api-config"
+import dayjs from "dayjs"
+import { debounce } from 'lodash-es'
+import {
+    Plus,
+    Search,
+    Refresh,
+    Grid,
+    List
+} from '@element-plus/icons-vue'
+import PodLogs from '@/components/PodLogs.vue'
+import PodTerminal from '@/components/PodTerminal.vue'
+
+const { t } = useI18n()
+
+// 接口定义
+interface PodDisplayItem {
+    uid: string
+    name: string
+    namespace: string
+    status: string
+    reason?: string
+    message?: string
+    ip?: string
+    node?: string
+    createdAt: string
+    labels?: { [key: string]: string }
+}
+
+interface K8sContainer {
+    name: string
+    image: string
+}
+
+interface PodDetail {
+    name: string
+    namespace: string
+    uid: string
+    spec: {
+        containers: K8sContainer[]
+        initContainers?: K8sContainer[]
+    }
+    status?: {
+        phase?: string
+        containerStatuses?: Array<{ name: string; ready: boolean; state: any }>
+    }
+}
+
+// 响应式状态
+const allPods = ref<PodDisplayItem[]>([])
+const namespaces = ref<string[]>([])
+const selectedNamespace = ref<string>("")
+const currentPage = ref(1)
+const pageSize = ref(12)
+const searchQuery = ref("")
+const filterStatus = ref("")
+const viewMode = ref<'card' | 'list'>('card')
+
+const loading = reactive({
+    namespaces: false,
+    pods: false
+})
+
+// 对话框状态
+const yamlDialogConfig = reactive({
+    visible: false,
+    content: '',
+    saving: false
+})
+
+const logDialogConfig = reactive({
+    visible: false,
+    targetPod: null as PodDisplayItem | null,
+    containers: [] as K8sContainer[]
+})
+
+const execDialogConfig = reactive({
+    visible: false,
+    targetPod: null as PodDisplayItem | null,
+    containers: [] as K8sContainer[]
+})
+
+// 组件引用
+const podLogsRef = ref()
+const podTerminalRef = ref()
+
+// 过滤后的 Pod 列表
+const filteredPods = computed(() => {
+    return allPods.value.filter(pod => {
+        // 搜索过滤
+        const matchesSearch = !searchQuery.value ||
+            pod.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+            (pod.ip && pod.ip.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
+            (pod.node && pod.node.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
+            pod.status.toLowerCase().includes(searchQuery.value.toLowerCase())
+
+        // 状态过滤
+        const matchesStatus = !filterStatus.value ||
+            pod.status.toLowerCase() === filterStatus.value.toLowerCase()
+
+        return matchesSearch && matchesStatus
+    })
+})
+
+// 当前页数据
+const paginatedData = computed(() => {
+    const start = (currentPage.value - 1) * pageSize.value
+    const end = start + pageSize.value
+    return filteredPods.value.slice(start, end)
+})
+
+// 获取命名空间列表
+const fetchNamespacesList = async () => {
+    loading.namespaces = true
+    try {
+        const namespaceList = await fetchNamespaces()
+        namespaces.value = namespaceList
+        if (namespaceList.length > 0 && !selectedNamespace.value) {
+            // 默认选择 "All" 选项来查看所有命名空间的 Pod
+            selectedNamespace.value = '__ALL__'
+        }
+    } catch (error: any) {
+        ElMessage.error(error.message)
+        namespaces.value = []
+        selectedNamespace.value = ""
+        allPods.value = []
+    } finally {
+        loading.namespaces = false
+    }
+}
+
+// 获取 Pod 数据
+const fetchPodData = async () => {
+    if (!selectedNamespace.value) {
+        allPods.value = []
+        return
+    }
+
+    loading.pods = true
+    try {
+        let url = ''
+        if (selectedNamespace.value === '__ALL__') {
+            // 获取所有命名空间的 Pod
+            url = '/api/v1/pods'
+        } else {
+            // 获取指定命名空间的 Pod
+            url = `/api/v1/namespaces/${selectedNamespace.value}/pods`
+        }
+
+        const response = await kubernetesRequest({
+            url: url,
+            method: "get"
+        })
+
+        if (response.code === 200 && response.data?.items) {
+            allPods.value = response.data.items.map((pod: any) => ({
+                uid: pod.metadata.uid,
+                name: pod.metadata.name,
+                namespace: pod.metadata.namespace,
+                labels: pod.metadata.labels,
+                status: pod.status?.phase || 'Unknown',
+                reason: pod.status?.reason,
+                message: pod.status?.message,
+                ip: pod.status?.podIP,
+                node: pod.spec?.nodeName,
+                createdAt: pod.metadata.creationTimestamp
+            }))
+
+            // 调整页码
+            nextTick(() => {
+                const totalPages = Math.ceil(filteredPods.value.length / pageSize.value)
+                if (currentPage.value > totalPages && totalPages > 0) {
+                    currentPage.value = totalPages
+                }
+            })
+        } else {
+            ElMessage.error(`获取 Pod 数据失败: ${response.message || '未知错误'}`)
+            allPods.value = []
+        }
+    } catch (error: any) {
+        console.error("获取 Pod 数据失败:", error)
+        ElMessage.error(`获取 Pod 数据出错: ${error.message || '网络请求失败'}`)
+        allPods.value = []
+    } finally {
+        loading.pods = false
+    }
+}
+
+// 获取 Pod 详情
+const fetchPodDetails = async (namespace: string, name: string): Promise<PodDetail | null> => {
+    try {
+        const response = await kubernetesRequest({
+            url: `/api/v1/namespaces/${namespace}/pods/${name}`,
+            method: "get"
+        })
+        if (response.code === 200 && response.data) {
+            return response.data
+        } else {
+            ElMessage.error(`获取 Pod 详情失败: ${response.message || '未知错误'}`)
+            return null
+        }
+    } catch (error: any) {
+        console.error(`获取 Pod 详情失败:`, error)
+        ElMessage.error(`获取 Pod 详情出错: ${error.message || '网络错误'}`)
+        return null
+    }
+}
+
+// 辅助函数
+const getStatusClass = (status: string) => {
+    const lowerStatus = status.toLowerCase()
+    if (lowerStatus === 'running' || lowerStatus === 'succeeded') return 'status-healthy'
+    if (lowerStatus.includes('failed') || lowerStatus.includes('error') || lowerStatus.includes('crashloop')) return 'status-unhealthy'
+    return 'status-unknown'
+}
+
+const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+        running: t('podManagement.statuses.running'),
+        pending: t('podManagement.statuses.pending'),
+        succeeded: t('podManagement.statuses.succeeded'),
+        failed: t('podManagement.statuses.failed'),
+        unknown: t('podManagement.statuses.unknown'),
+        terminating: t('podManagement.statuses.terminating')
+    }
+    return statusMap[status.toLowerCase()] || status
+}
+
+const formatTimestamp = (timestamp: string): string => {
+    if (!timestamp) return 'N/A'
+    const d = dayjs(timestamp)
+    return d.isValid() ? d.format("YYYY-MM-DD HH:mm:ss") : 'Invalid Date'
+}
+
+// 事件处理
+const handleNamespaceChange = () => {
+    currentPage.value = 1
+    searchQuery.value = ''
+    filterStatus.value = ''
+    fetchPodData()
+}
+
+const handlePageChange = (page: number) => {
+    currentPage.value = page
+}
+
+const handleSizeChange = (size: number) => {
+    pageSize.value = size
+    currentPage.value = 1
+}
+
+const handleSearchDebounced = debounce(() => {
+    currentPage.value = 1
+}, 300)
+
+const handlePodClick = (pod: PodDisplayItem) => {
+    console.log('Pod clicked:', pod)
+}
+
+// Pod 操作
+const handleAddPod = () => {
+    if (!selectedNamespace.value || selectedNamespace.value === '__ALL__') {
+        ElMessage.warning("请先选择一个具体的命名空间")
+        return
+    }
+    yamlDialogConfig.content = getPlaceholderYaml()
+    yamlDialogConfig.visible = true
+}
+
+const getPlaceholderYaml = () => {
+    return `apiVersion: v1
 kind: Pod
 metadata:
-  generateName: new-pod-from-ui-
-  namespace: ${selectedNamespace.value || 'default'} # Will use selected NS
+  generateName: new-pod-
+  namespace: ${selectedNamespace.value || 'default'}
   labels:
-    app: myapp-${Math.random().toString(36).substring(2, 6)} # Add random part to label
+    app: myapp
     created-by: cilikube-ui
 spec:
   containers:
-  - name: main-container # Use a more descriptive name
+  - name: main-container
     image: nginx:alpine
     ports:
     - containerPort: 80
       protocol: TCP
-    resources: # Add basic resource requests/limits as good practice
+    resources:
       requests:
         memory: "64Mi"
         cpu: "100m"
       limits:
         memory: "128Mi"
         cpu: "200m"
-  restartPolicy: Never # Default for Pod, use Deployment for Always/OnFailure
-  `);
-  
-  // --- Log Dialog State ---
-  const logDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', content: '', follow: false, tailLines: 500 as number | undefined, loadingContainers: false, loadingLogs: false, websocket: null as WebSocket | null, connected: false });
-  
-  // --- Exec Dialog State ---
-  const execDialogConfig = reactive({ visible: false, targetPod: null as PodDisplayItem | null, containers: [] as K8sContainer[], selectedContainer: '', command: 'sh', loadingContainers: false, connecting: false, connected: false, statusText: '', statusType: 'info' as 'info' | 'success' | 'error' |'warning'});
-  const terminalContainerRef = ref<HTMLDivElement | null>(null);
-  let terminal: Terminal | null = null;
-  let fitAddon: FitAddon | null = null;
-  let websocket: WebSocket | null = null;
-  
-  
-  // --- Computed Properties ---
-  const filteredData = computed(() => {
-      const query = searchQuery.value.trim().toLowerCase();
-      if (!query) return allPods.value;
-      return allPods.value.filter(pod =>
-          pod.name.toLowerCase().includes(query) ||
-          (pod.ip && pod.ip.toLowerCase().includes(query)) ||
-          (pod.node && pod.node.toLowerCase().includes(query)) ||
-          pod.status.toLowerCase().includes(query)
-      );
-  });
-  
-  // FIXED: Corrected sorting logic for dates and other types
-  const sortedData = computed(() => {
-      const data = [...filteredData.value];
-      const { key, order } = sortParams;
-  
-      if (!key || !order) return data; // No sorting needed
-  
-      data.sort((a, b) => {
-          // Get values, handle potential undefined/null early
-          const valA = a[key as keyof PodDisplayItem] ?? '';
-          const valB = b[key as keyof PodDisplayItem] ?? '';
-  
-          let comparison = 0;
-  
-          // Specific handling for 'createdAt' using original ISO string
-          if (key === 'createdAt') {
-              // Ensure values are valid date strings before parsing
-              const timeA = typeof valA === 'string' && valA ? dayjs(valA).valueOf() : 0;
-              const timeB = typeof valB === 'string' && valB ? dayjs(valB).valueOf() : 0;
-              const numA = isNaN(timeA) ? 0 : timeA;
-              const numB = isNaN(timeB) ? 0 : timeB;
-              if (numA < numB) comparison = -1;
-              else if (numA > numB) comparison = 1;
-          } else {
-              // General comparison for other fields (treat as strings, case-insensitive)
-              const strA = String(valA).toLowerCase();
-              const strB = String(valB).toLowerCase();
-              if (strA < strB) comparison = -1;
-              else if (strA > strB) comparison = 1;
-          }
-  
-          return order === 'ascending' ? comparison : -comparison;
-      });
-      return data;
-  });
-  
-  
-  const paginatedData = computed(() => {
-      const start = (currentPage.value - 1) * pageSize.value;
-      const end = start + pageSize.value;
-      return sortedData.value.slice(start, end);
-  });
-  
-  const totalFilteredPods = computed(() => filteredData.value.length);
-  
-  
-  // --- Helper Functions ---
-  // FIXED: Format timestamp only for display
-  const formatTimestamp = (isoTimestamp: string): string => {
-      if (!isoTimestamp) return 'N/A';
-      const d = dayjs(isoTimestamp);
-      return d.isValid() ? d.format("YYYY-MM-DD HH:mm:ss") : 'Invalid Date';
-  }
-  // Status helpers remain the same
-  const getStatusTagType = (status: string | any): 'success' | 'warning' | 'danger' | 'info' => {
-      if (!status || typeof status !== 'string') return 'info';
-      const lowerStatus = status.toLowerCase();
-      if (lowerStatus === 'running' || lowerStatus === 'succeeded') return 'success';
-      if (lowerStatus.includes('pending') || lowerStatus.includes('creating') || lowerStatus.includes('initializing')) return 'warning';
-      if (lowerStatus.includes('failed') || lowerStatus.includes('error') || lowerStatus.includes('crashloop') || lowerStatus.includes('imagepull') || lowerStatus === 'nodeaffinity' || lowerStatus === 'unschedulable') return 'danger';
-      if (lowerStatus.includes('terminating')) return 'info';
-      return 'info';
-  }
-  const getStatusIcon = (status: string | any) => {
-      if (!status || typeof status !== 'string') return QuestionFilled;
-      const lowerStatus = status.toLowerCase();
-       if (lowerStatus === 'running' || lowerStatus === 'succeeded') return CircleCheckFilled;
-       if (lowerStatus.includes('pending') || lowerStatus.includes('creating') || lowerStatus.includes('terminating') || lowerStatus.includes('initializing')) return LoadingIcon;
-       if (lowerStatus.includes('failed') || lowerStatus.includes('error') || lowerStatus.includes('crashloop') || lowerStatus.includes('imagepull') || lowerStatus === 'nodeaffinity' || lowerStatus === 'unschedulable') return CloseBold;
-      return QuestionFilled;
-  }
-  const getSpinClass = (status: string) => { /* ... same ... */
-       if (!status) return '';
-      const lowerStatus = status.toLowerCase();
-      return (lowerStatus.includes('pending') || lowerStatus.includes('creating') || lowerStatus.includes('terminating') || lowerStatus.includes('initializing')) ? 'is-loading' : '';
-  }
-  
-  
-  // --- API Interaction ---
-  const fetchNamespacesList = async () => {
-      loading.namespaces = true;
-      try {
-          const namespaceList = await fetchNamespaces();
-          namespaces.value = namespaceList;
-          if (namespaceList.length > 0 && !selectedNamespace.value) {
-               selectedNamespace.value = namespaceList.find(ns => ns === 'default') || namespaceList[0];
-          } else if (namespaceList.length === 0) {
-              ElMessage.warning("未找到任何命名空间。");
-              selectedNamespace.value = ""; allPods.value = [];
-          }
-      } catch (error: any) {
-          ElMessage.error(error.message);
-          namespaces.value = []; selectedNamespace.value = ""; allPods.value = [];
-      } finally {
-          loading.namespaces = false;
-      }
-  }
-  
-  const fetchPodData = async () => {
-      if (!selectedNamespace.value) {
-          allPods.value = [];
-          loading.pods = false;
-          return;
-      }
-      loading.pods = true;
-      // Ensure page number is valid before fetching
-      if (currentPage.value < 1) { currentPage.value = 1; }
-  
-      try {
-          const response = await kubernetesRequest<PodApiResponse>({ 
+  restartPolicy: Never`
+}
+
+const handleSaveYaml = async () => {
+    if (!selectedNamespace.value) {
+        ElMessage.error("未选择命名空间")
+        return
+    }
+
+    yamlDialogConfig.saving = true
+    try {
+        const response = await kubernetesRequest({
             url: `/api/v1/namespaces/${selectedNamespace.value}/pods`,
-            method: "get"
-          });
-  
-          if (response.code === 200 && response.data?.items) {
-              // 正确映射Kubernetes Pod对象到显示格式
-              allPods.value = response.data.items.map(pod => ({
-                  uid: pod.metadata.uid,
-                  name: pod.metadata.name,
-                  namespace: pod.metadata.namespace,
-                  labels: pod.metadata.labels,
-                  annotations: pod.metadata.annotations,
-                  status: pod.status?.phase || 'Unknown', // 提取状态字符串
-                  reason: pod.status?.reason,
-                  message: pod.status?.message,
-                  ip: pod.status?.podIP,
-                  node: pod.spec?.nodeName,
-                  createdAt: pod.metadata.creationTimestamp
-              }));
-  
-              // Adjust page number *after* data is loaded and filtering/sorting is applied
-              // This logic runs implicitly because totalFilteredPods updates
-               nextTick(() => {
-                  const totalPages = Math.ceil(totalFilteredPods.value / pageSize.value);
-                  if (currentPage.value > totalPages && totalPages > 0) {
-                      currentPage.value = totalPages;
-                  } else if (totalFilteredPods.value === 0 && currentPage.value !== 1) {
-                      currentPage.value = 1;
-                  }
-              });
-  
-          } else {
-              ElMessage.error(`获取 Pod 数据失败 (ns: ${selectedNamespace.value}): ${response.message || '未知错误'}`);
-              allPods.value = [];
-          }
-      } catch (error: any) {
-          console.error("获取 Pod 数据失败:", error);
-          ElMessage.error(`获取 Pod 数据出错 (ns: ${selectedNamespace.value}): ${error.message || '网络请求失败'}`);
-          allPods.value = [];
-      } finally {
-          // Ensure loading stops even if errors occur during data processing
-          loading.pods = false;
-      }
-  }
-  
-  
-  async function fetchPodDetails(namespace: string, name: string): Promise<PodDetail | null> {
-       // Reuse table loading indicator or add specific loading state
-       // loading.pods = true;
-       try {
-           const response = await kubernetesRequest<PodDetailApiResponse>({ 
-             url: `/api/v1/namespaces/${namespace}/pods/${name}`, 
-             method: "get" 
-           });
-           if (response.code === 200 && response.data) {
-               return response.data;
-           } else {
-               ElMessage.error(`获取 Pod 详情 '${name}' 失败: ${response.message || '未知错误'}`);
-               return null;
-           }
-       } catch (error: any) {
-           console.error(`获取 Pod 详情 '${name}' 失败:`, error);
-           ElMessage.error(`获取 Pod 详情 '${name}' 出错: ${error.message || '网络错误'}`);
-           return null;
-       } finally {
-          // loading.pods = false;
-       }
-   }
-  
-  // --- Event Handlers (Client-side based) ---
-  const handleNamespaceChange = () => { currentPage.value = 1; searchQuery.value = ''; sortParams.key = 'createdAt'; sortParams.order = 'descending'; fetchPodData(); };
-  const handlePageChange = (page: number) => { currentPage.value = page; };
-  const handleSizeChange = (size: number) => { pageSize.value = size; currentPage.value = 1; };
-  const handleSearchDebounced = debounce(() => { currentPage.value = 1; }, 300);
-  const handleSortChange = ({ prop, order }: { prop: string | null; order: 'ascending' | 'descending' | null }) => { sortParams.key = prop || 'createdAt'; sortParams.order = order; currentPage.value = 1; };
-  
-  
-  // --- Dialog and CRUD Actions ---
-  const handleAddPod = () => {
-      if (!selectedNamespace.value) { ElMessage.warning("请先选择一个命名空间"); return; }
-      isEditMode.value = false; editingPodName.value = null;
-      yamlDialogConfig.content = placeholderYaml.value; yamlDialogConfig.visible = true;
-  };
-  
-const handleEditPod = async (pod: PodDisplayItem) => {
-    //debugger
-       isEditMode.value = true; editingPodName.value = pod.name;
-       yamlDialogConfig.saving = true; yamlDialogConfig.content = "# 正在加载 YAML..."; yamlDialogConfig.visible = true;
-       try {
-           const response = await kubernetesRequest<YamlApiResponse>({ 
-             url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}/yaml`, 
-             method: 'get' 
-           });
-           if (response.code === 200 && typeof response.data === 'string') {
-               yamlDialogConfig.content = response.data;
-               await nextTick(); // 等待 DOM 更新
-           } else { /* ... error handling ... */
-               yamlDialogConfig.content = `# 获取 YAML 失败: ${response.message || '未知错误'}`;
-               ElMessage.error(`获取 Pod YAML 失败: ${response.message || '格式错误'}`);
-           }
-       } catch (error: any) { /* ... error handling ... */
-           console.error("获取 Pod YAML 失败:", error);
-           const errMsg = error.response?.data?.message || error.message || '网络错误';
-           yamlDialogConfig.content = `# 获取 YAML 出错:\n${errMsg}`;
-           ElMessage.error(`获取 Pod YAML 出错: ${errMsg}`);
-       } finally { yamlDialogConfig.saving = false; }
-   };
-  
-  const handleSaveYaml = async () => {
-      const targetNamespace = selectedNamespace.value; // Get current namespace
-      if (!targetNamespace && !isEditMode.value) { ElMessage.error("未选择命名空间。"); return; }
-      yamlDialogConfig.saving = true;
-      const currentYaml = yamlDialogConfig.content;
-      try {
-          let response: any; let successMsg = '';
-          if (isEditMode.value && editingPodName.value) {
-              response = await kubernetesRequest({ 
-                url: `/api/v1/namespaces/${targetNamespace}/pods/${editingPodName.value}/yaml`, 
-                method: 'put', 
-                headers: { 'Content-Type': 'application/yaml' }, 
-                data: currentYaml 
-              });
-              successMsg = `Pod "${editingPodName.value}" 更新成功！`;
-          } else {
-              response = await kubernetesRequest({ 
-                url: `/api/v1/namespaces/${targetNamespace}/pods`, 
-                method: 'post', 
-                headers: { 'Content-Type': 'application/yaml' }, 
-                data: currentYaml 
-              });
-              const createdName = response.data?.name || '新创建的 Pod';
-              successMsg = `Pod "${createdName}" 创建成功！`;
-          }
-          if (response.code === 200 || response.code === 201) {
-              ElMessage.success(successMsg); yamlDialogConfig.visible = false; fetchPodData();
-          } else { ElMessage.error(`操作失败: ${response.message || '未知后端错误'}`); }
-      } catch (error: any) { /* ... error handling ... */
-          console.error("应用 YAML 失败:", error);
-          const errMsg = error.response?.data?.message || error.message || '请求失败';
-          ElMessage.error(`应用 YAML 出错: ${errMsg}`);
-      } finally { yamlDialogConfig.saving = false; }
-  };
-  
-  const handleYamlDialogClose = () => { yamlDialogConfig.content = ''; isEditMode.value = false; editingPodName.value = null; }
-  
-  const handleDeletePod = (pod: PodDisplayItem) => { /* ... same logic as before ... */
-      ElMessageBox.confirm(
-          `确定要删除 Pod "${pod.name}" (命名空间: ${pod.namespace}) 吗？`, '确认删除',
-          { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
-      ).then(async () => {
-          loading.pods = true;
-          try {
-              await kubernetesRequest({ 
-                url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}`, 
-                method: "delete" 
-              });
-              ElMessage.success(`Pod "${pod.name}" 已删除`);
-              // Refresh list or optimistic update
-              await fetchPodData();
-          } catch (error: any) {
-               console.error("删除 Pod 失败:", error);
-               const errMsg = error.response?.data?.message || error.message || '请求失败';
-               ElMessage.error(`删除 Pod "${pod.name}" 失败: ${errMsg}`);
-               // Only stop loading on error if not refreshing
-               // loading.pods = false; // Let refresh handle loading state
-          }
-          // finally { loading.pods = false; } // Let refresh handle loading state
-      }).catch(() => ElMessage.info('删除操作已取消'));
-  };
-  
-// --- View Logs ---
-  // 用于标记是否需要自动滚动
-  const shouldAutoScroll = ref(true);
-  
-  const handleViewLogs = async (pod: PodDisplayItem) => {
-      logDialogConfig.targetPod = pod;
-      logDialogConfig.visible = true;
-      logDialogConfig.loadingContainers = true;
-      logDialogConfig.containers = [];
-      logDialogConfig.selectedContainer = '';
-  
-      // 关闭之前的 WebSocket 连接
-      if (logDialogConfig.websocket) {
-          logDialogConfig.websocket.close();
-          logDialogConfig.websocket = null;
-      }
-      logDialogConfig.connected = false;
-      // 清理日志内容
-      logDialogConfig.content = '正在加载容器列表...';
-  
-      const details = await fetchPodDetails(pod.namespace, pod.name);
-      if (details?.spec) {
-          const running = details.spec.containers || [];
-          const init = (details.spec.initContainers || []).map(c => ({...c, name: `[init] ${c.name}`}));
-          const all = [...running, ...init]; logDialogConfig.containers = all;
-          if (all.length > 0) { logDialogConfig.selectedContainer = running[0]?.name || all[0].name; await fetchLogs(); }
-          else { logDialogConfig.content = '此 Pod 没有找到容器。'; }
-      } else { logDialogConfig.content = '获取 Pod 详情失败。'; }
-      logDialogConfig.loadingContainers = false;
-  };
-  const fetchLogs = async () => {
-      if (!logDialogConfig.targetPod || !logDialogConfig.selectedContainer) {
-          // 关闭之前的 WebSocket 连接
-          if (logDialogConfig.websocket) {
-              logDialogConfig.websocket.close();
-              logDialogConfig.websocket = null;
-          }
-          logDialogConfig.connected = false;
-          // 清理日志内容
-          logDialogConfig.content = '请选择容器。';
-          return;
-      }
-      logDialogConfig.loadingLogs = true;
-      logDialogConfig.content = '正在加载日志...';
-  
-      // 关闭之前的 WebSocket 连接
-      if (logDialogConfig.websocket) {
-          logDialogConfig.websocket.close();
-          logDialogConfig.websocket = null;
-      }
-      logDialogConfig.connected = false;
-  
-      try {
-          let actualContainerName = logDialogConfig.selectedContainer;
-          if (actualContainerName.startsWith('[init] ')) {
-              actualContainerName = actualContainerName.replace('[init] ', '');
-          }
-          const params = new URLSearchParams({
-              container: actualContainerName,
-              tailLines: logDialogConfig.tailLines?.toString() || '',
-              timestamps: 'true'
-          });
-          const wsUrl = `${WS_BASE_URL}/api/v1/namespaces/${logDialogConfig.targetPod.namespace}/pods/${logDialogConfig.targetPod.name}/logs?${params.toString()}`;
-  
-          // 建立 WebSocket 连接
-          logDialogConfig.websocket = new WebSocket(wsUrl);
-  
-          logDialogConfig.websocket.onopen = () => {
-              console.log('Log WebSocket 连接成功');
-              logDialogConfig.connected = true;
-              logDialogConfig.content = ''; // 清空之前的内容
-          };
+            method: 'post',
+            headers: { 'Content-Type': 'application/yaml' },
+            data: yamlDialogConfig.content
+        })
 
-          logDialogConfig.websocket.onmessage = (event) => {
-              // 追加日志内容
-              if (typeof event.data === 'string') {
-                  logDialogConfig.content += event.data + '\n';
-              }
-              // 自动滚动到最新日志
-              nextTick(() => {
-                  const logContainer = document.querySelector('.log-content');
-                  if (logContainer && shouldAutoScroll.value) {
-                      logContainer.scrollTop = logContainer.scrollHeight;
-                  }
-              });
-          };
-  
-          logDialogConfig.websocket.onerror = (error) => {
-              console.error('Log WebSocket 连接出错:', error);
-              logDialogConfig.content += `# 获取日志出错\n`;
-              logDialogConfig.connected = false;
-              ElMessage.error('获取日志出错，请重试');
-          };
+        if (response.code === 200 || response.code === 201) {
+            ElMessage.success(t('podManagement.messages.createSuccess'))
+            yamlDialogConfig.visible = false
+            fetchPodData()
+        } else {
+            ElMessage.error(`操作失败: ${response.message || '未知错误'}`)
+        }
+    } catch (error: any) {
+        console.error("应用 YAML 失败:", error)
+        const errMsg = error.response?.data?.message || error.message || '请求失败'
+        ElMessage.error(`应用 YAML 出错: ${errMsg}`)
+    } finally {
+        yamlDialogConfig.saving = false
+    }
+}
 
-          logDialogConfig.websocket.onclose = (event) => {
-              console.log('Log WebSocket 关闭:', event.code, event.reason);
-              logDialogConfig.connected = false;
-              if (event.code !== 1000) { // 非正常关闭
-                  logDialogConfig.content += `# WebSocket 连接已断开: ${event.reason || event.code}\n`;
-              }
-          };
-          // 监听滚动事件
-        nextTick(() => {
-            const logContainer = document.querySelector('.log-content');
-            if (logContainer) {
-                logContainer.addEventListener('scroll', () => {
-                    const { scrollTop, scrollHeight, clientHeight } = logContainer;
-                    // 判断是否滚动到最底部
-                    shouldAutoScroll.value = scrollTop + clientHeight >= scrollHeight - 2;
-                });
-            }
-        });
-      } catch (error: any) {
-          console.error("获取日志失败:", error);
-          const errMsg = error.response?.data || error.message || '请求失败';
-          logDialogConfig.content = `# 获取日志出错:\n${errMsg}`;
-          ElMessage.error(`获取日志出错: ${errMsg}`);
-      } finally {
-          logDialogConfig.loadingLogs = false;
-      }
-  };
-  const handleLogDialogClose = () => {
-      // 关闭 WebSocket 连接
-      if (logDialogConfig.websocket) {
-          logDialogConfig.websocket.close(1000, 'User closed dialog');
-          logDialogConfig.websocket = null;
-      }
-      logDialogConfig.targetPod = null;
-      logDialogConfig.containers = [];
-      logDialogConfig.selectedContainer = '';
-      logDialogConfig.content = '';
-      logDialogConfig.follow = false;
-      logDialogConfig.tailLines = 500;
-      logDialogConfig.connected = false;
-  };
-  
-  // --- Exec into Container ---
-  const handleExec = async (pod: PodDisplayItem) => { /* ... same logic ... */
-      execDialogConfig.targetPod = pod; execDialogConfig.visible = true; execDialogConfig.loadingContainers = true;
-      execDialogConfig.containers = []; execDialogConfig.selectedContainer = ''; execDialogConfig.connected = false; execDialogConfig.connecting = false;
-      execDialogConfig.statusText = '加载容器列表...'; execDialogConfig.statusType = 'info';
-      const details = await fetchPodDetails(pod.namespace, pod.name);
-      const runningContainers = details && details.spec && details.spec.containers ? details.spec.containers:[];
-       if (runningContainers.length > 0) { execDialogConfig.containers = runningContainers; execDialogConfig.selectedContainer = runningContainers[0].name; execDialogConfig.statusText = '请确认容器并连接。'; }
-       else { execDialogConfig.statusText = '未找到该 Pod 中正在运行的容器。'; execDialogConfig.containers = []; execDialogConfig.statusType = 'warning'; }
-       execDialogConfig.loadingContainers = false;
-  };
-  const initTerminal = async () => {
-      await nextTick();
-      if (!terminalContainerRef.value) {
-          console.error('终端容器元素未找到');
-          return;
-      }
-      if (terminal) {
-          terminal.dispose();
-      }
-      terminal = markRaw(new Terminal({
-          cursorBlink: true,
-          rows: 25,
-          theme: { background: '#222', foreground: '#ddd' },
-          convertEol: true,
-          fontFamily: 'Consolas, "Courier New", monospace',
-          fontSize: 13,
-          letterSpacing: 1
-      }));
-      fitAddon = markRaw(new FitAddon());
-      terminal.loadAddon(fitAddon);
-      terminal.open(terminalContainerRef.value);
-      try {
-          fitAddon.fit();
-      } catch (e) {
-          console.error("调整终端大小出错:", e);
-      }
-      terminal.onData((data) => {
-          if (websocket?.readyState === WebSocket.OPEN) {
-              websocket.send(data);
-          }
-      });
-      terminal.writeln('\r\n请选择容器并点击 "连接" 按钮...');
-      console.log('终端初始化完成');
-  };
-  const connectWebSocket = () => {
-      if (!execDialogConfig.targetPod || !execDialogConfig.selectedContainer || execDialogConfig.connected || execDialogConfig.connecting) return;
-      execDialogConfig.connecting = true;
-      execDialogConfig.statusText = '正在连接...';
-      execDialogConfig.statusType = 'info';
-      terminal?.reset();
-      terminal?.writeln('尝试连接 WebSocket...');
-      const { namespace, name } = execDialogConfig.targetPod;
-      const container = execDialogConfig.selectedContainer;
-      const command = execDialogConfig.command || 'sh';
-      const params = new URLSearchParams({ container, command, tty: 'true', stdin: 'true', stdout: 'true', stderr: 'true' });
-      const wsUrl = `${WS_BASE_URL}/api/v1/namespaces/${namespace}/pods/${name}/exec?${params.toString()}`;
-      websocket = new WebSocket(wsUrl);
-  
-      websocket.onopen = () => {
-          console.log('WebSocket 连接成功');
-          execDialogConfig.connecting = false;
-          execDialogConfig.connected = true;
-          execDialogConfig.statusText = `已连接 (${container})`;
-          execDialogConfig.statusType = 'success';
-          terminal?.writeln('\r\n\x1b[32m连接成功！\x1b[0m');
-          terminal?.focus();
-          if (fitAddon) fitAddon.fit();
-      };
-  
-      websocket.onmessage = async (event) => {
-          console.log('收到 WebSocket 消息:', event.data);
-          try {
-              if (event.data instanceof ArrayBuffer) {
-                  terminal?.write(new Uint8Array(event.data));
-              } else if (typeof event.data === 'string') {
-                  terminal?.write(event.data);
-              } else if (event.data instanceof Blob) {
-                  // 将 Blob 转换为 ArrayBuffer
-                  const arrayBuffer = await event.data.arrayBuffer();
-                  terminal?.write(new Uint8Array(arrayBuffer));
-              }
-          } catch (error) {
-              console.error('写入终端消息出错:', error);
-          }
-      };
-  
-      websocket.onerror = (event) => {
-          console.error("WebSocket 错误:", event);
-          execDialogConfig.connecting = false;
-          execDialogConfig.connected = false;
-          execDialogConfig.statusText = 'WebSocket 连接错误';
-          execDialogConfig.statusType = 'error';
-          terminal?.writeln(`\r\n\x1b[31mWebSocket 错误\x1b[0m`);
-      };
-  
-      websocket.onclose = (event) => {
-          console.log("WebSocket 关闭:", event.code, event.reason);
-          execDialogConfig.connecting = false;
-          execDialogConfig.connected = false;
-          const reason = event.reason || `Code ${event.code}`;
-          execDialogConfig.statusText = `连接已断开 (${reason})`;
-          execDialogConfig.statusType = 'info';
-          terminal?.writeln(`\r\n\x1b[33m连接已关闭: ${reason}\x1b[0m`);
-          websocket = null;
-      };
-  };
-  const disconnectWebSocket = () => { /* ... same logic ... */ if (websocket) { execDialogConfig.statusText = '正在断开连接...'; execDialogConfig.statusType = 'info'; websocket.close(1000, "User disconnected"); } };
-  const handleExecDialogClose = () => { /* ... same logic ... */ disconnectWebSocket(); if (terminal) { terminal.dispose(); terminal = null; } fitAddon = null; execDialogConfig.targetPod = null; execDialogConfig.containers = []; execDialogConfig.selectedContainer = ''; execDialogConfig.connected = false; execDialogConfig.connecting = false; execDialogConfig.statusText = ''; };
-  
-  // --- Lifecycle Hooks ---
-  onMounted(async () => {
-      loading.page = true;
-      await fetchNamespacesList();
-      if (selectedNamespace.value) {
-          await fetchPodData();
-      } else {
-          console.log("挂载时未选择命名空间，跳过 Pod 数据获取。");
-          // Explicitly stop loading if no initial fetch happens
-          loading.pods = false;
-      }
-      loading.page = false;
-  });
-  onBeforeUnmount(() => { handleExecDialogClose(); });
-  
-  </script>
-  
-  <style lang="scss" scoped>
-  /* Styles remain the same */
-  $page-padding: 20px;
-  $spacing-md: 15px;
-  $spacing-lg: 20px;
-  $font-size-base: 14px;
-  $font-size-small: 12px;
-  $font-size-large: 16px;
-  $font-size-extra-large: 24px;
-  $border-radius-base: 4px;
-  $kube-pod-icon-color: #326ce5;
-  
-  .pod-page-container { padding: $page-padding; background-color: var(--el-bg-color-page, #f5f7fa); }
-  .page-breadcrumb { margin-bottom: $spacing-lg; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: $spacing-md; flex-wrap: wrap; gap: $spacing-md; }
-  .page-title { font-size: $font-size-extra-large; font-weight: 600; color: var(--el-text-color-primary); margin: 0; }
-  .info-alert { margin-bottom: $spacing-lg; background-color: var(--el-color-info-light-9); :deep(.el-alert__description) { font-size: $font-size-small; color: var(--el-text-color-regular); line-height: 1.6; } }
-  .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-md; margin-bottom: $spacing-lg; padding: $spacing-md; background-color: var(--el-bg-color-overlay); border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); }
-  .namespace-select { width: 240px; }
-  .search-input { width: 300px; }
-  .pod-table { border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); overflow: hidden; :deep(th.el-table__cell) { background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-weight: 600; font-size: $font-size-small; } :deep(td.el-table__cell) { padding: 8px 10px; font-size: $font-size-base; vertical-align: middle; } .pod-icon { margin-right: 8px; color: $kube-pod-icon-color; vertical-align: middle; font-size: 18px; position: relative; top: -1px; } .pod-name { font-weight: 500; vertical-align: middle; color: var(--el-text-color-regular); } .status-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: 22px; line-height: 20px; font-size: $font-size-small; cursor: default; } .status-icon { font-size: 12px; } .is-loading { animation: rotating 1.5s linear infinite; } }
-  @keyframes rotating { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .el-table .el-button.is-link { font-size: 14px; padding: 4px; margin: 0 3px; vertical-align: middle; }
-  .pagination-container { display: flex; justify-content: flex-end; margin-top: $spacing-lg; }
-  .yaml-editor-container { border: 1px solid var(--el-border-color); border-radius: $border-radius-base; overflow: hidden; }
-  .dialog-footer { text-align: right; padding-top: 10px; }
-  .log-options-form { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--el-border-color-lighter); }
-  .log-display-container { height: 60vh; overflow: hidden; background-color: #222; /* Darker bg */ border-radius: $border-radius-base; border: 1px solid var(--el-border-color); }
-  .log-content { height: 100%; overflow: auto; padding: 10px; margin: 0; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height: 1.5; color: #ddd; /* Lighter text */ white-space: pre-wrap; word-break: break-all; }
-  .terminal-container { width: 100%; height: 60vh; background-color: #222; border-radius: $border-radius-base; overflow: hidden; border: 1px solid var(--el-border-color); }
-  :deep(.exec-dialog .el-dialog__body) { padding: 15px 20px; }
-  :deep(.log-dialog .el-dialog__body) { padding: 10px 20px 20px 20px; }
-  .status-text { font-size: $font-size-small; margin-left: 10px; &.status-success { color: var(--el-color-success); } &.status-error { color: var(--el-color-error); } &.status-info { color: var(--el-text-color-secondary); } }
-  </style>
+const handleYamlDialogClose = () => {
+    yamlDialogConfig.content = ''
+}
+
+const handleDeletePod = (pod: PodDisplayItem) => {
+    ElMessageBox.confirm(
+        t('podManagement.messages.deleteConfirm', { name: pod.name }),
+        t('common.confirm'),
+        {
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel'),
+            type: 'warning'
+        }
+    ).then(async () => {
+        try {
+            await kubernetesRequest({
+                url: `/api/v1/namespaces/${pod.namespace}/pods/${pod.name}`,
+                method: "delete"
+            })
+            ElMessage.success(t('podManagement.messages.deleteSuccess'))
+            await fetchPodData()
+        } catch (error: any) {
+            console.error("删除 Pod 失败:", error)
+            const errMsg = error.response?.data?.message || error.message || '请求失败'
+            ElMessage.error(`${t('podManagement.messages.deleteFailed')}: ${errMsg}`)
+        }
+    }).catch(() => {
+        ElMessage.info('删除操作已取消')
+    })
+}
+
+// 查看日志
+const handleViewLogs = async (pod: PodDisplayItem) => {
+    logDialogConfig.targetPod = pod
+    logDialogConfig.visible = true
+    logDialogConfig.containers = []
+
+    const details = await fetchPodDetails(pod.namespace, pod.name)
+    if (details?.spec) {
+        const containers = details.spec.containers || []
+        logDialogConfig.containers = containers
+    }
+}
+
+const handleLogDialogClose = () => {
+    logDialogConfig.targetPod = null
+    logDialogConfig.containers = []
+}
+
+// 进入容器
+const handleExec = async (pod: PodDisplayItem) => {
+    execDialogConfig.targetPod = pod
+    execDialogConfig.visible = true
+    execDialogConfig.containers = []
+
+    const details = await fetchPodDetails(pod.namespace, pod.name)
+    if (details?.spec) {
+        const containers = details.spec.containers || []
+        execDialogConfig.containers = containers
+    }
+}
+
+const handleExecDialogClose = () => {
+    execDialogConfig.targetPod = null
+    execDialogConfig.containers = []
+}
+
+// 监听命名空间变化
+watch(() => selectedNamespace.value, (newNamespace) => {
+    if (newNamespace) {
+        fetchPodData()
+    } else {
+        allPods.value = []
+    }
+}, { immediate: true })
+
+// 组件挂载
+onMounted(async () => {
+    await fetchNamespacesList()
+    if (selectedNamespace.value) {
+        await fetchPodData()
+    }
+})
+</script>
+
+<style scoped>
+.pod-management {
+    padding: 24px;
+    background: #f8fafc;
+    min-height: 100vh;
+}
+
+/* 页面头部 */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.page-title {
+    font-size: 32px;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* 工具栏 */
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+}
+
+.search-filters {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex: 1;
+}
+
+.namespace-select {
+    width: 200px;
+}
+
+.search-input {
+    width: 280px;
+}
+
+.filter-select {
+    width: 160px;
+}
+
+.toolbar-right {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.view-toggle {
+    border-radius: 8px;
+}
+
+/* 按钮样式 - 透明背景 + 彩色边框 */
+:deep(.el-button--primary) {
+    background-color: transparent;
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
+:deep(.el-button--primary:hover) {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: #ffffff;
+}
+
+:deep(.el-button--primary:active),
+:deep(.el-button--primary.is-active) {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: #ffffff;
+}
+
+:deep(.el-button--success) {
+    background-color: transparent;
+    border-color: #10b981;
+    color: #10b981;
+}
+
+:deep(.el-button--success:hover) {
+    background-color: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+}
+
+:deep(.el-button--success:active),
+:deep(.el-button--success.is-active) {
+    background-color: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+}
+
+:deep(.el-button--danger) {
+    background-color: transparent;
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+:deep(.el-button--danger:hover) {
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+
+:deep(.el-button--danger:active),
+:deep(.el-button--danger.is-active) {
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+
+/* Pod 列表 */
+.pod-list {
+    min-height: 400px;
+}
+
+.pod-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 20px;
+}
+
+.pod-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.pod-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #3b82f6;
+}
+
+.card-header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.pod-info {
+    margin-bottom: 12px;
+}
+
+.pod-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.pod-namespace {
+    font-size: 13px;
+    color: #475569;
+    font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.card-body {
+    padding: 16px 20px;
+}
+
+.pod-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.meta-label {
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.meta-value {
+    font-size: 13px;
+    color: #1e293b;
+    font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-weight: 600;
+}
+
+.card-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #f1f5f9;
+    background: white;
+}
+
+.pod-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* 状态指示器 - 简洁小圆点样式 */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.status-healthy {
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.status-unhealthy {
+    background: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.status-unknown {
+    background: #64748b;
+    box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.2);
+}
+
+/* Pod 名称行 */
+.pod-name-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+/* 列表视图 */
+.pod-table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.table-pod-name {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.ip-address {
+    font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    color: #475569;
+    font-weight: 600;
+}
+
+.table-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.empty-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 80px 20px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+/* 分页 */
+.pagination-container {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+/* 对话框样式 */
+.yaml-dialog :deep(.el-dialog__body) {
+    padding: 20px 24px;
+}
+
+.yaml-editor-container {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.yaml-editor-container :deep(.el-textarea__inner) {
+    font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    border: none;
+    border-radius: 0;
+}
+
+.log-dialog :deep(.el-dialog__body) {
+    padding: 20px 24px;
+}
+
+.log-options {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.log-content-container {
+    height: 60vh;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1e293b;
+}
+
+.log-content {
+    height: 100%;
+    overflow: auto;
+    padding: 16px;
+    margin: 0;
+    font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #1e293b;
+}
+
+.exec-dialog :deep(.el-dialog__body) {
+    padding: 20px 24px;
+}
+
+.exec-options {
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.terminal-container {
+    width: 100%;
+    height: 60vh;
+    background: #1e293b;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.terminal-placeholder {
+    color: #64748b;
+    font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 14px;
+}
+
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 0 0;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+    .pod-grid {
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .pod-management {
+        padding: 16px;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .page-title {
+        font-size: 28px;
+    }
+
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    .search-filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .namespace-select,
+    .search-input,
+    .filter-select {
+        width: 100%;
+    }
+
+    .toolbar-right {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .pod-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .meta-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .pod-actions {
+        flex-direction: column;
+    }
+
+    .table-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+}
+</style>

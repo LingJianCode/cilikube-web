@@ -1,164 +1,199 @@
 <template>
-    <div class="namespace-page-container">
-      <!-- Breadcrumbs -->
-      <el-breadcrumb separator="/" class="page-breadcrumb">
-        <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-        <el-breadcrumb-item>集群管理</el-breadcrumb-item>
-        <el-breadcrumb-item>命名空间</el-breadcrumb-item>
-      </el-breadcrumb>
-  
-      <!-- Header: Title, Search, Actions -->
-      <div class="page-header">
-        <h1 class="page-title">命名空间 (Namespaces)</h1>
-        <div class="header-actions">
-          <el-input
-            v-model="searchQuery"
-            placeholder="搜索命名空间名称"
-            :prefix-icon="SearchIcon"
-            clearable
-            @input="handleSearchDebounced"
-            class="search-input"
-          />
-          <el-button type="primary" :icon="PlusIcon" @click="showCreateDialog" :loading="loading">
-            新建命名空间
-          </el-button>
-           <el-tooltip content="刷新列表" placement="top">
-             <el-button :icon="RefreshIcon" circle @click="fetchNamespaceData" :loading="loading" />
-           </el-tooltip>
+  <div class="namespace-management">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <h1 class="page-title">{{ $t('namespaceManagement.title') }}</h1>
+      <div class="header-actions">
+        <el-button :icon="Refresh" @click="fetchNamespaceData" :loading="loading" circle />
+        <el-button type="primary" :icon="Plus" @click="showCreateDialog">
+          {{ $t('namespaceManagement.actions.create') }}
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 集群选择提示 -->
+    <el-alert
+      v-if="!selectedClusterName && !s_loadingClusters"
+      :title="$t('namespaceManagement.messages.selectCluster')"
+      type="info" show-icon :closable="false" style="margin-bottom: 24px;"
+    />
+
+    <!-- 工具栏 -->
+    <div class="toolbar" v-if="selectedClusterName">
+      <div class="search-filters">
+        <el-input v-model="searchQuery" :placeholder="$t('namespaceManagement.searchPlaceholder')" :prefix-icon="Search"
+          clearable class="search-input" @input="handleSearchDebounced" />
+        <el-select v-model="filterStatus" :placeholder="$t('namespaceManagement.filterStatus')" clearable
+          class="filter-select">
+          <el-option :label="$t('namespaceManagement.allStatuses')" value="" />
+          <el-option :label="$t('namespaceManagement.statuses.active')" value="active" />
+          <el-option :label="$t('namespaceManagement.statuses.terminating')" value="terminating" />
+        </el-select>
+      </div>
+      <div class="toolbar-right">
+        <el-button-group class="view-toggle">
+          <el-button :type="viewMode === 'card' ? 'primary' : ''" :icon="Grid" @click="viewMode = 'card'" />
+          <el-button :type="viewMode === 'list' ? 'primary' : ''" :icon="List" @click="viewMode = 'list'" />
+        </el-button-group>
+      </div>
+    </div>
+
+    <!-- 命名空间列表 -->
+    <div class="namespace-list" v-loading="loading">
+      <!-- 卡片视图 -->
+      <div v-if="filteredData.length > 0 && viewMode === 'card'" class="namespace-grid">
+        <div v-for="namespace in paginatedData" :key="namespace.uid" class="namespace-card"
+          @click="handleNamespaceClick(namespace)">
+          <div class="card-header">
+            <div class="namespace-info">
+              <div class="namespace-name-row">
+                <div class="status-dot" :class="getStatusClass(namespace.status)"></div>
+                <div class="namespace-name">{{ namespace.name }}</div>
+                <el-tag v-if="isSystemNamespace(namespace.name)" type="warning" size="small" class="system-badge">
+                  {{ $t('namespaceManagement.info.systemNamespace') }}
+                </el-tag>
+              </div>
+              <div class="namespace-status">{{ getStatusText(namespace.status) }}</div>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="namespace-meta">
+              <div class="meta-item">
+                <span class="meta-label">{{ $t('namespaceManagement.columns.created') }}</span>
+                <span class="meta-value">{{ namespace.creationTimestamp }}</span>
+              </div>
+              <div class="meta-item" v-if="namespace.labels && Object.keys(namespace.labels).length > 0">
+                <span class="meta-label">{{ $t('namespaceManagement.columns.labels') }}</span>
+                <span class="meta-value">{{ Object.keys(namespace.labels).length }} {{ $t('namespaceManagement.columns.labels') }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="namespace-actions">
+              <el-button type="primary" size="small" @click.stop="viewNamespaceDetails(namespace)">
+                {{ $t('namespaceManagement.actions.viewDetails') }}
+              </el-button>
+              <el-button type="danger" size="small" @click.stop="handleDeleteNamespace(namespace)"
+                :disabled="isSystemNamespace(namespace.name)">
+                {{ $t('namespaceManagement.actions.delete') }}
+              </el-button>
+            </div>
+          </div>
         </div>
       </div>
-  
-      <!-- Cluster Knowledge Alert -->
-       <el-alert
-         title="关于命名空间"
-         type="info"
-         show-icon
-         :closable="true"
-         class="info-alert"
-       >
-          <p>在 Kubernetes 中，名字空间（Namespace） 提供一种机制，将同一集群中的资源划分为相互隔离的组。 同一名字空间内的资源名称要唯一，但跨名字空间时没有这个要求。 名字空间作用域仅针对带有名字空间的对象（例如 Deployment、Service 等），这种作用域对集群范围的对象（例如 StorageClass、Node、PersistentVolume 等）不适用。</p>
-       </el-alert>
-  
-      <!-- Namespace Table -->
-      <el-table :data="paginatedData" v-loading="loading" style="width: 100%" border stripe class="namespace-table">
-        <el-table-column prop="name" label="名称" min-width="200" sortable fixed>
-          <template #default="{ row }">
-            <span class="namespace-name">{{ row.name }}</span>
-             <el-tooltip v-if="isSystemNamespace(row.name)" content="系统命名空间" placement="top">
-               <el-icon class="system-ns-icon"><Setting /></el-icon>
-             </el-tooltip>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" min-width="120" align="center" sortable>
-          <template #default="{ row }">
-            <el-tag :type="getStatusTagType(row.status)" size="small" effect="light">
-              <el-icon class="status-icon">
-                <CircleCheckFilled v-if="row.status === 'Active'" />
-                <WarningFilled v-else />
-              </el-icon>
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="creationTimestamp" label="创建时间" min-width="180" sortable />
-        <el-table-column label="操作" width="150" align="center" fixed="right">
-          <template #default="{ row }">
-             <el-tooltip content="查看详情" placement="top">
-                <el-button link type="primary" :icon="ViewIcon" @click="viewNamespaceDetails(row)"/>
-             </el-tooltip>
-             <el-tooltip content="编辑元数据" placement="top">
-                <el-button link type="primary" :icon="EditPenIcon" @click="editNamespaceMetadata(row)"/>
-             </el-tooltip>
-             <el-tooltip content="删除" placement="top">
-                <el-button
-                  link
-                  type="danger"
-                  :icon="DeleteIcon"
-                  @click="handleDeleteNamespace(row)"
-                  :disabled="isSystemNamespace(row.name)"
-                />
-             </el-tooltip>
-          </template>
-        </el-table-column>
-          <template #empty>
-            <el-empty description="未找到命名空间" />
-          </template>
-      </el-table>
-  
-      <!-- Pagination -->
-      <div class="pagination-container" v-if="totalNamespaces > 0">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="totalNamespaces"
-          layout="total, sizes, prev, pager, next, jumper"
-          background
-          @size-change="handleSizeChange"
-          @current-change="handlePageChange"
-          :disabled="loading"
-        />
+
+      <!-- 列表视图 -->
+      <div v-else-if="filteredData.length > 0 && viewMode === 'list'" class="namespace-table">
+        <el-table :data="paginatedData" @row-click="handleNamespaceClick">
+          <el-table-column width="60">
+            <template #default="{ row }">
+              <div class="status-dot" :class="getStatusClass(row.status)"></div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="name" :label="$t('namespaceManagement.columns.name')" min-width="200">
+            <template #default="{ row }">
+              <div class="table-namespace-name">
+                {{ row.name }}
+                <el-tag v-if="isSystemNamespace(row.name)" type="warning" size="small" class="system-badge">
+                  {{ $t('namespaceManagement.info.systemNamespace') }}
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('namespaceManagement.columns.status')" width="120">
+            <template #default="{ row }">
+              <span>{{ getStatusText(row.status) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="creationTimestamp" :label="$t('namespaceManagement.columns.created')" width="180" />
+          <el-table-column :label="$t('common.actions')" width="200" fixed="right">
+            <template #default="{ row }">
+              <div class="table-actions">
+                <el-button type="primary" size="small" @click.stop="viewNamespaceDetails(row)">
+                  {{ $t('namespaceManagement.actions.viewDetails') }}
+                </el-button>
+                <el-button type="danger" size="small" @click.stop="handleDeleteNamespace(row)"
+                  :disabled="isSystemNamespace(row.name)">
+                  {{ $t('namespaceManagement.actions.delete') }}
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
-  
-      <!-- Create Namespace Dialog -->
-      <el-dialog
-        v-model="isDialogVisible"
-        title="新建命名空间"
-        width="500px"
-        :close-on-click-modal="false"
-        @closed="resetForm"
-      >
-        <el-form ref="formRef" :model="form" :rules="formRules" label-width="120px" label-position="right">
-          <el-form-item label="名称" prop="name">
-            <el-input
-              v-model="form.name"
-              placeholder="请输入命名空间名称 (小写字母、数字、'-')"
-              clearable
-            />
-             <div class="form-item-help">
-               名称必须符合 Kubernetes DNS-1123 标签标准。
-             </div>
-          </el-form-item>
-           <!-- Add fields for labels/annotations if needed -->
-           <!--
-           <el-form-item label="标签">
-             <el-input type="textarea" v-model="form.labels" placeholder="输入键值对, 例如: key1=value1, key2=value2" />
-           </el-form-item>
-           -->
-        </el-form>
-        <template #footer>
-          <div class="dialog-footer">
-            <el-button @click="isDialogVisible = false" :disabled="createLoading">取 消</el-button>
-            <el-button type="primary" @click="createNamespace" :loading="createLoading">
-              确 定
-            </el-button>
-          </div>
-        </template>
-      </el-dialog>
+
+      <div v-else-if="!loading && selectedClusterName" class="empty-state">
+        <el-empty :description="searchQuery || filterStatus ? 
+          $t('namespaceManagement.messages.noMatchingNamespaces') : 
+          $t('namespaceManagement.messages.noNamespaces')" />
+      </div>
     </div>
-  </template>
+
+    <!-- 分页 -->
+    <div class="pagination-container" v-if="filteredData.length > pageSize">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[12, 24, 36, 48]"
+        :total="filteredData.length"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @size-change="handleSizeChange"
+        @current-change="handlePageChange"
+      />
+    </div>
+
+    <!-- 创建命名空间对话框 -->
+    <el-dialog v-model="isDialogVisible" :title="$t('namespaceManagement.actions.create')" width="600px"
+      :close-on-click-modal="false" @closed="resetForm" class="namespace-dialog">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="120px" class="namespace-form">
+        <div class="form-section">
+          <h4 class="section-title">{{ $t('clusterManagement.basicInfo') }}</h4>
+          <el-form-item :label="$t('namespaceManagement.form.name')" prop="name">
+            <el-input v-model="form.name" :placeholder="$t('namespaceManagement.form.namePlaceholder')" clearable />
+            <div class="form-item-help">
+              {{ $t('namespaceManagement.form.nameFormat') }}
+            </div>
+          </el-form-item>
+        </div>
+      </el-form>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="isDialogVisible = false" size="large">
+            {{ $t('common.cancel') }}
+          </el-button>
+          <el-button type="primary" @click="createNamespace" :loading="createLoading" size="large">
+            {{ $t('common.confirm') }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+  </div>
+</template>
   
   <script setup lang="ts">
   import { ref, computed, onMounted, reactive, nextTick, watch } from "vue"
-  import { ElMessage, ElMessageBox, ElLoading } from "element-plus" // Keep ElLoading for create/delete potentially
+  import { useI18n } from 'vue-i18n'
+  import { ElMessage, ElMessageBox, ElLoading } from "element-plus"
   import type { FormInstance, FormRules } from 'element-plus'
   import { kubernetesRequest, KubernetesApiResponse } from "@/utils/api-config"
   import dayjs from "dayjs"
-  import { debounce } from 'lodash-es'; // Import debounce
+  import { debounce } from 'lodash-es'
   import { storeToRefs } from "pinia"
   import { useClusterStore } from "@/store/modules/clusterStore"
   
   import {
-    Search as SearchIcon,
-    Plus as PlusIcon,
-    Refresh as RefreshIcon,
-    View as ViewIcon,
-    EditPen as EditPenIcon,
-    Delete as DeleteIcon,
-    Setting,
-    CircleCheckFilled,
-    WarningFilled
+    Search,
+    Plus,
+    Refresh,
+    Grid,
+    List
   } from '@element-plus/icons-vue'
+
+  const { t } = useI18n()
   
   // --- Interfaces based on API response ---
   interface K8sMetadata {
@@ -206,18 +241,20 @@
   // --- Reactive State ---
   const allNamespaces = ref<NamespaceDisplayItem[]>([])
   const currentPage = ref(1)
-  const pageSize = ref(10)
+  const pageSize = ref(12)
   const searchQuery = ref("")
-  const loading = ref(false) // Main loading state for table/data fetch
+  const filterStatus = ref("")
+  const viewMode = ref<'card' | 'list'>('card')
+  const loading = ref(false)
   const isDialogVisible = ref(false)
-  const createLoading = ref(false) // Loading state specifically for create button
+  const createLoading = ref(false)
   
   const formRef = ref<FormInstance>()
-  const form = reactive<{ name: string; labels?: string }>({ // Adjust if adding labels/annotations
+  const form = reactive<{ name: string; labels?: string }>({
     name: ""
   });
   
-  const systemNamespaces = ['kube-system', 'kube-public', 'kube-node-lease', 'default'] // Add others if needed
+  const systemNamespaces = ['kube-system', 'kube-public', 'kube-node-lease', 'default']
   
   // --- Form Rules ---
   const validateNamespaceName = (rule: any, value: string, callback: any) => {
@@ -454,6 +491,23 @@
       ElMessage.info(`模拟: 编辑命名空间 "${namespace.name}" 的标签/注解`);
       // Show a different dialog or navigate to an edit page
   }
+
+  // 新增的辅助函数
+  const getStatusClass = (status: string) => {
+    if (status === 'Active') return 'status-healthy'
+    if (status === 'Terminating') return 'status-unhealthy'
+    return 'status-unknown'
+  }
+
+  const getStatusText = (status: string) => {
+    if (status === 'Active') return t('namespaceManagement.statuses.active')
+    if (status === 'Terminating') return t('namespaceManagement.statuses.terminating')
+    return t('namespaceManagement.statuses.unknown')
+  }
+
+  const handleNamespaceClick = (namespace: NamespaceDisplayItem) => {
+    console.log('Namespace clicked:', namespace)
+  }
   
   // --- Lifecycle Hooks ---
   onMounted(() => {
@@ -461,106 +515,332 @@
   })
   </script>
   
-  <style lang="scss" scoped>
-  .namespace-page-container {
-    padding: 20px;
-    background-color: var(--el-bg-color-page);
+  <style scoped>
+.namespace-management {
+  padding: 24px;
+  background: #f8fafc;
+  min-height: 100vh;
+}
+
+/* 页面头部 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.search-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex: 1;
+}
+
+.search-input {
+  width: 280px;
+}
+
+.filter-select {
+  width: 160px;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.view-toggle {
+  border-radius: 8px;
+}
+
+/* 命名空间列表 */
+.namespace-list {
+  min-height: 400px;
+}
+
+.namespace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+.namespace-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.namespace-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #3b82f6;
+}
+
+.card-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.namespace-info {
+  margin-bottom: 12px;
+}
+
+.namespace-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.namespace-status {
+  font-size: 13px;
+  color: #475569;
+  font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.card-body {
+  padding: 16px 20px;
+}
+
+.namespace-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.meta-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.meta-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.meta-value {
+  font-size: 13px;
+  color: #1e293b;
+  font-family: 'Maple Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 600;
+}
+
+.card-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #f1f5f9;
+  background: white;
+}
+
+.namespace-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 状态指示器 - 简洁小圆点样式 */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.status-healthy {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.status-unhealthy {
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.status-unknown {
+  background: #64748b;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.2);
+}
+
+/* 命名空间名称行 */
+.namespace-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.system-badge {
+  margin-left: auto;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
+/* 列表视图 */
+.namespace-table {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.table-namespace-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 80px 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+/* 分页 */
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* 对话框样式 */
+.namespace-dialog :deep(.el-dialog__body) {
+  padding: 20px 24px;
+}
+
+.namespace-form {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.form-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.form-item-help {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 0 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .namespace-grid {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   }
-  
-  .page-breadcrumb {
-    margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .namespace-management {
+    padding: 16px;
   }
-  
+
   .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 15px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
   }
-  
+
   .page-title {
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-    margin: 0;
+    font-size: 28px;
   }
-  
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
   }
-  
-  .search-input {
-    width: 250px; // Adjust width as needed
-     :deep(.el-input__wrapper) {
-      border-radius: var(--el-border-radius-base); // Ensure consistency
-     }
+
+  .search-filters {
+    flex-direction: column;
+    align-items: stretch;
   }
-  
-  .info-alert {
-    margin-bottom: 20px;
-    p {
-        margin: 5px 0;
-        line-height: 1.6;
-        font-size: 13px;
-    }
+
+  .search-input,
+  .filter-select {
+    width: 100%;
   }
-  
-  
-  .namespace-table {
-     border-radius: 4px; // Subtle border radius for table
-     border: 1px solid var(--el-border-color-lighter); // Add border
-  
-     :deep(th.el-table__cell) {
-         background-color: var(--el-fill-color-lighter);
-         color: var(--el-text-color-secondary);
-         font-weight: 600;
-     }
-  
-     .namespace-name {
-         font-weight: 500;
-         color: var(--el-text-color-regular);
-     }
-  
-     .system-ns-icon {
-         margin-left: 5px;
-         color: var(--el-text-color-secondary);
-         font-size: 14px;
-         vertical-align: middle;
-     }
-  
-     .status-icon {
-         margin-right: 4px;
-         vertical-align: middle; // Ensure icon aligns with text
-         position: relative;
-         top: -1px; // Fine-tune vertical alignment
-     }
+
+  .toolbar-right {
+    justify-content: space-between;
+    width: 100%;
   }
-  
-  .el-table .el-button.is-link {
-     font-size: 13px; // Ensure action button icons aren't too large
-     padding: 4px; // Adjust padding for link buttons
-     vertical-align: middle;
+
+  .namespace-grid {
+    grid-template-columns: 1fr;
   }
-  
-  .pagination-container {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
+
+  .meta-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
-  
-  .dialog-footer {
-    text-align: right;
+
+  .namespace-actions {
+    flex-direction: column;
   }
-  
-  .form-item-help {
-      font-size: 12px;
-      color: var(--el-text-color-secondary);
-      line-height: 1.4;
-      margin-top: 4px;
-  }
+}
   </style>

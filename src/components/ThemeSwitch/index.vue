@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { type ThemeName, useTheme } from "@/hooks/useTheme"
+import { useI18n } from "vue-i18n"
 import { MagicStick } from "@element-plus/icons-vue"
 
+const { t } = useI18n()
 const { themeList, activeThemeName, setTheme } = useTheme()
 
 const handleChangeTheme = ({ clientX, clientY }: MouseEvent, themeName: ThemeName) => {
@@ -10,9 +12,9 @@ const handleChangeTheme = ({ clientX, clientY }: MouseEvent, themeName: ThemeNam
     Math.max(clientY, window.innerHeight - clientY)
   )
   const style = document.documentElement.style
-  style.setProperty("--v3-theme-x", clientX + "px")
-  style.setProperty("--v3-theme-y", clientY + "px")
-  style.setProperty("--v3-theme-r", maxRadius + "px")
+  style.setProperty("--ck-theme-x", clientX + "px")
+  style.setProperty("--ck-theme-y", clientY + "px")
+  style.setProperty("--ck-theme-r", maxRadius + "px")
   const handler = () => {
     setTheme(themeName)
   }
@@ -24,7 +26,7 @@ const handleChangeTheme = ({ clientX, clientY }: MouseEvent, themeName: ThemeNam
 <template>
   <el-dropdown trigger="click">
     <div>
-      <el-tooltip effect="dark" content="主题切换" placement="bottom">
+      <el-tooltip effect="dark" :content="t('ui.themeSwitch')" placement="bottom">
         <el-icon :size="20">
           <MagicStick />
         </el-icon>
@@ -42,7 +44,7 @@ const handleChangeTheme = ({ clientX, clientY }: MouseEvent, themeName: ThemeNam
             }
           "
         >
-          <span>{{ theme.title }}</span>
+          <span>{{ t(theme.title) }}</span>
         </el-dropdown-item>
       </el-dropdown-menu>
     </template>

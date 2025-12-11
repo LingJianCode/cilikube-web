@@ -1,11 +1,13 @@
 <script lang="ts" setup>
 import { ref, computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { ElMessage } from "element-plus"
 import { Bell } from "@element-plus/icons-vue"
 import NotifyList from "./NotifyList.vue"
 import { type ListItem, notifyData, messageData, todoData } from "./data"
 
-type TabName = "通知" | "消息" | "待办"
+const { t } = useI18n()
+type TabName = "notifications" | "messages" | "todos"
 
 interface DataItem {
   name: TabName
@@ -22,31 +24,42 @@ const badgeMax = 99
 /** 面板宽度 */
 const popoverWidth = 350
 /** 当前 Tab */
-const activeName = ref<TabName>("通知")
+const activeName = ref<TabName>("notifications")
+
+/** 获取国际化的标签名 */
+const getTabName = (name: TabName) => {
+  const tabNames = {
+    "notifications": t('ui.notifications'),
+    "messages": t('ui.messages'),
+    "todos": t('ui.todos')
+  }
+  return tabNames[name] || name
+}
+
 /** 所有数据 */
 const data = ref<DataItem[]>([
   // 通知数据
   {
-    name: "通知",
+    name: "notifications",
     type: "primary",
     list: notifyData
   },
   // 消息数据
   {
-    name: "消息",
+    name: "messages",
     type: "danger",
     list: messageData
   },
   // 待办数据
   {
-    name: "待办",
+    name: "todos",
     type: "warning",
     list: todoData
   }
 ])
 
 const handleHistory = () => {
-  ElMessage.success(`跳转到${activeName.value}历史页面`)
+  ElMessage.success(t('ui.viewHistory', { type: getTabName(activeName.value) }))
 }
 </script>
 
@@ -55,7 +68,7 @@ const handleHistory = () => {
     <el-popover placement="bottom" :width="popoverWidth" trigger="click">
       <template #reference>
         <el-badge :value="badgeValue" :max="badgeMax" :hidden="badgeValue === 0">
-          <el-tooltip effect="dark" content="消息通知" placement="bottom">
+          <el-tooltip effect="dark" :content="t('ui.notifications')" placement="bottom">
             <el-icon :size="20">
               <Bell />
             </el-icon>
@@ -66,7 +79,7 @@ const handleHistory = () => {
         <el-tabs v-model="activeName" class="demo-tabs" stretch>
           <el-tab-pane v-for="(item, index) in data" :name="item.name" :key="index">
             <template #label>
-              {{ item.name }}
+              {{ getTabName(item.name) }}
               <el-badge :value="item.list.length" :max="badgeMax" :type="item.type" />
             </template>
             <el-scrollbar height="400px">
@@ -75,7 +88,7 @@ const handleHistory = () => {
           </el-tab-pane>
         </el-tabs>
         <div class="notify-history">
-          <el-button link @click="handleHistory">查看{{ activeName }}历史</el-button>
+          <el-button link @click="handleHistory">{{ t('ui.viewHistory', { type: getTabName(activeName) }) }}</el-button>
         </div>
       </template>
     </el-popover>

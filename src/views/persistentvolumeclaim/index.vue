@@ -1,15 +1,8 @@
 <template>
     <div class="pvc-page-container">
-      <!-- Breadcrumbs -->
-      <el-breadcrumb separator="/" class="page-breadcrumb">
-        <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-        <el-breadcrumb-item>存储管理</el-breadcrumb-item>
-        <el-breadcrumb-item>PersistentVolumeClaims (PVC)</el-breadcrumb-item>
-      </el-breadcrumb>
-  
       <!-- Header: Title & Create Button -->
       <div class="page-header">
-        <h1 class="page-title">PersistentVolumeClaims (PVC) 列表</h1>
+        <h1 class="page-title">{{ $t('persistentVolumeClaimManagement.title') }}</h1>
          <el-button
            type="primary"
            :icon="PlusIcon"
@@ -17,25 +10,15 @@
            :loading="loading.page"
            :disabled="!selectedNamespace"
          >
-           创建 PVC (YAML)
+           {{ $t('persistentVolumeClaimManagement.actions.create') }}
          </el-button>
       </div>
-  
-       <!-- Cluster Knowledge Alert -->
-       <el-alert
-         title="关于 PersistentVolumeClaims"
-         type="info"
-         show-icon
-         :closable="true"
-         class="info-alert"
-         description="PersistentVolumeClaim (PVC) 是用户对存储的请求。它与 Pod 相似，Pod 会耗用节点资源，而 PVC 耗用 PV 资源。Pod 可以请求特定数量的资源（CPU 和内存）；同样 PVC 可以请求特定的大小和访问模式 （例如，可以要求 PV 挂载为 ReadWriteOnce、ReadOnlyMany、ReadWriteMany 或 ReadWriteOncePod）。"
-       />
   
       <!-- Filter Bar: Namespace, Search, Refresh -->
       <div class="filter-bar">
           <el-select
               v-model="selectedNamespace"
-              placeholder="请选择命名空间"
+              :placeholder="$t('persistentVolumeClaimManagement.filterNamespace')"
               @change="handleNamespaceChange"
               filterable
               :loading="loading.namespaces"
@@ -45,14 +28,14 @@
               <el-option v-for="ns in namespaces" :key="ns" :label="ns" :value="ns" />
                <template #empty>
                   <div style="padding: 10px; text-align: center; color: #999;">
-                      {{ loading.namespaces ? '正在加载...' : '无可用命名空间' }}
+                      {{ loading.namespaces ? $t('common.loading') : $t('persistentVolumeClaimManagement.messages.noNamespaces') }}
                   </div>
               </template>
           </el-select>
   
           <el-input
               v-model="searchQuery"
-              placeholder="搜索 PVC 名称 / 绑定 PV"
+              :placeholder="$t('persistentVolumeClaimManagement.searchPlaceholder')"
               :prefix-icon="SearchIcon"
               clearable
               @input="handleSearchDebounced"
@@ -60,7 +43,7 @@
               :disabled="!selectedNamespace || loading.pvcs"
           />
   
-          <el-tooltip content="刷新列表" placement="top">
+          <el-tooltip :content="$t('actions.refresh')" placement="top">
               <el-button
                 :icon="RefreshIcon"
                 circle
@@ -71,26 +54,27 @@
           </el-tooltip>
       </div>
   
-      <!-- PVCs Table -->
-      <el-table
-          :data="paginatedData"
-          v-loading="loading.pvcs"
-          border
-          stripe
-          style="width: 100%"
-          @sort-change="handleSortChange"
-          class="pvc-table"
-          :default-sort="{ prop: 'createdAt', order: 'descending' }"
-          row-key="uid"
-      >
-          <el-table-column prop="name" label="名称" min-width="250" sortable="custom" fixed show-overflow-tooltip>
+      <!-- PVCs Table Card -->
+      <el-card class="pvc-table-card" shadow="hover">
+        <el-table
+            :data="paginatedData"
+            v-loading="loading.pvcs"
+            border
+            stripe
+            style="width: 100%"
+            @sort-change="handleSortChange"
+            class="pvc-table"
+            :default-sort="{ prop: 'createdAt', order: 'descending' }"
+            row-key="uid"
+        >
+          <el-table-column prop="name" :label="$t('persistentVolumeClaimManagement.columns.name')" min-width="250" sortable="custom" fixed show-overflow-tooltip>
                <template #default="{ row }">
                   <el-icon class="pvc-icon"><MessageBox /></el-icon>
                   <span class="pvc-name">{{ row.name }}</span>
               </template>
           </el-table-column>
-          <el-table-column prop="namespace" label="命名空间" min-width="150" sortable="custom" show-overflow-tooltip />
-          <el-table-column prop="status" label="状态" min-width="120" sortable="custom" align="center">
+          <el-table-column prop="namespace" :label="$t('persistentVolumeClaimManagement.columns.namespace')" min-width="150" sortable="custom" show-overflow-tooltip />
+          <el-table-column prop="status" :label="$t('persistentVolumeClaimManagement.columns.status')" min-width="120" sortable="custom" align="center">
               <template #default="{ row }">
                   <el-tag :type="getStatusTagType(row.status)" size="small" effect="light">
                       <el-icon class="status-icon" v-if="getStatusIcon(row.status)" :class="getSpinClass(row.status)">
@@ -100,22 +84,22 @@
                   </el-tag>
               </template>
           </el-table-column>
-          <el-table-column prop="volumeName" label="绑定卷 (PV)" min-width="200" sortable="custom" show-overflow-tooltip>
+          <el-table-column prop="volumeName" :label="$t('persistentVolumeClaimManagement.columns.boundVolume')" min-width="200" sortable="custom" show-overflow-tooltip>
               <template #default="{ row }">
                   {{ row.volumeName || '-' }}
               </template>
           </el-table-column>
-          <el-table-column prop="capacity" label="请求容量" min-width="110" sortable="custom" align="right">
+          <el-table-column prop="capacity" :label="$t('persistentVolumeClaimManagement.columns.requestCapacity')" min-width="110" sortable="custom" align="right">
                <template #default="{ row }">
                   {{ formatCapacity(row.capacity) }}
               </template>
           </el-table-column>
-           <el-table-column prop="actualCapacity" label="实际容量" min-width="110" sortable="custom" align="right">
+           <el-table-column prop="actualCapacity" :label="$t('persistentVolumeClaimManagement.columns.actualCapacity')" min-width="110" sortable="custom" align="right">
                <template #default="{ row }">
                   {{ formatCapacity(row.actualCapacity) }}
               </template>
           </el-table-column>
-          <el-table-column prop="accessModes" label="访问模式" min-width="150">
+          <el-table-column prop="accessModes" :label="$t('persistentVolumeClaimManagement.columns.accessModes')" min-width="150">
                <template #default="{ row }">
                   <div v-for="mode in row.accessModes" :key="mode">
                       <el-tag size="small" type="info" effect="plain" style="margin-right: 4px;">{{ mode }}</el-tag>
@@ -123,62 +107,63 @@
                    <span v-if="!row.accessModes || row.accessModes.length === 0">N/A</span>
               </template>
           </el-table-column>
-           <el-table-column prop="volumeMode" label="卷模式" min-width="100" align="center">
+           <el-table-column prop="volumeMode" :label="$t('persistentVolumeClaimManagement.columns.volumeMode')" min-width="100" align="center">
                <template #default="{ row }">
                   <el-tag type="info" size="small" effect="light">{{ row.volumeMode }}</el-tag>
               </template>
             </el-table-column>
-           <el-table-column prop="storageClass" label="StorageClass" min-width="150" show-overflow-tooltip>
+           <el-table-column prop="storageClass" :label="$t('persistentVolumeClaimManagement.columns.storageClass')" min-width="150" show-overflow-tooltip>
                <template #default="{ row }">
                    {{ row.storageClass || '<none>' }}
                </template>
            </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" min-width="180" sortable="custom" />
-          <el-table-column label="操作" width="130" align="center" fixed="right">
+          <el-table-column prop="createdAt" :label="$t('persistentVolumeClaimManagement.columns.createdAt')" min-width="180" sortable="custom" />
+          <el-table-column :label="$t('persistentVolumeClaimManagement.columns.actions')" width="130" align="center" fixed="right">
               <template #default="{ row }">
-                   <el-tooltip content="编辑 YAML" placement="top">
+                   <el-tooltip :content="$t('persistentVolumeClaimManagement.actions.editYaml')" placement="top">
                       <el-button link type="primary" :icon="EditPenIcon" @click="editPvcYaml(row)" />
                   </el-tooltip>
-                  <el-tooltip content="删除" placement="top">
+                  <el-tooltip :content="$t('persistentVolumeClaimManagement.actions.delete')" placement="top">
                       <el-button link type="danger" :icon="DeleteIcon" @click="handleDeletePVC(row)" />
                   </el-tooltip>
               </template>
           </el-table-column>
            <template #empty>
-            <el-empty v-if="!loading.pvcs && !selectedNamespace" description="请先选择一个命名空间以加载 PVCs" image-size="100" />
-            <el-empty v-else-if="!loading.pvcs && paginatedData.length === 0" :description="`在命名空间 '${selectedNamespace}' 中未找到 PVCs`" image-size="100" />
+            <el-empty v-if="!loading.pvcs && !selectedNamespace" :description="$t('persistentVolumeClaimManagement.messages.selectNamespace')" image-size="100" />
+            <el-empty v-else-if="!loading.pvcs && paginatedData.length === 0" :description="$t('persistentVolumeClaimManagement.messages.noPVCs')" image-size="100" />
            </template>
       </el-table>
-  
-      <!-- Pagination -->
-      <div class="pagination-container" v-if="!loading.pvcs && totalPvcs > 0">
-          <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :page-sizes="[10, 20, 50, 100]"
-              :total="totalPvcs"
-              layout="total, sizes, prev, pager, next, jumper"
-              background
-              @size-change="handleSizeChange"
-              @current-change="handlePageChange"
-              :disabled="loading.pvcs"
-          />
-      </div>
+
+        <!-- Pagination -->
+        <div class="pagination-container" v-if="!loading.pvcs && totalPvcs > 0">
+            <el-pagination
+                v-model:current-page="currentPage"
+                v-model:page-size="pageSize"
+                :page-sizes="[10, 20, 50, 100]"
+                :total="totalPvcs"
+                layout="total, sizes, prev, pager, next, jumper"
+                background
+                @size-change="handleSizeChange"
+                @current-change="handlePageChange"
+                :disabled="loading.pvcs"
+            />
+        </div>
+      </el-card>
   
       <!-- Create/Edit Dialog (YAML focus) -->
       <el-dialog :title="dialogTitle" v-model="dialogVisible" width="70%" :close-on-click-modal="false">
          <el-alert type="info" :closable="false" style="margin-bottom: 20px;">
-           请在此处粘贴或编辑 PersistentVolumeClaim 的 YAML 配置。确保 YAML 中的 `namespace` 与当前选定的命名空间 (`${selectedNamespace || '未选定'}`) 匹配或省略。
+           {{ $t('persistentVolumeClaimManagement.messages.yamlEditTip') }}
          </el-alert>
          <!-- Integrate a YAML editor component here -->
          <div class="yaml-editor-placeholder">
-              YAML 编辑器占位符
+              {{ $t('persistentVolumeClaimManagement.messages.yamlEditorPlaceholder') }}
               <pre>{{ yamlContent || placeholderYaml }}</pre>
          </div>
         <template #footer>
           <div class="dialog-footer">
-              <el-button @click="dialogVisible = false">取 消</el-button>
-              <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">应用 YAML</el-button>
+              <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+              <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">{{ $t('persistentVolumeClaimManagement.actions.applyYaml') }}</el-button>
           </div>
         </template>
       </el-dialog>
@@ -188,6 +173,7 @@
   
   <script setup lang="ts">
   import { ref, reactive, computed, onMounted } from "vue"
+  import { useI18n } from 'vue-i18n'
   import { ElMessage, ElMessageBox } from "element-plus"
   import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config" // Ensure correct path
   import dayjs from "dayjs"
@@ -256,9 +242,12 @@
       page: false, namespaces: false, pvcs: false, dialogSave: false
   })
   
+  // Get i18n instance
+  const { t } = useI18n()
+  
   // Dialog state (YAML focus)
   const dialogVisible = ref(false)
-  const dialogTitle = ref("创建 PVC (YAML)");
+  const dialogTitle = computed(() => currentEditPvc.value ? `${t('persistentVolumeClaimManagement.actions.edit')}: ${currentEditPvc.value.metadata.name} (YAML)` : t('persistentVolumeClaimManagement.messages.createPVCTitle'))
   const currentEditPvc = ref<PVCApiItem | null>(null); // Store raw API item
   const yamlContent = ref("");
   const placeholderYaml = computed(() => `apiVersion: v1
@@ -345,9 +334,9 @@
               namespaces.value = response.data.items.map(ns => ns.metadata.name);
               if (namespaces.value.length > 0 && !selectedNamespace.value) {
                    selectedNamespace.value = namespaces.value.find(ns => ns === 'default') || namespaces.value[0];
-              } else if (namespaces.value.length === 0) { ElMessage.warning("未找到任何命名空间。"); }
-          } else { ElMessage.error(`获取命名空间失败: ${response.message || '数据格式错误'}`); namespaces.value = []; }
-      } catch (error: any) { console.error("获取命名空间失败:", error); ElMessage.error(`获取命名空间失败: ${error.message || '网络请求失败'}`); namespaces.value = []; }
+              } else if (namespaces.value.length === 0) { ElMessage.warning(t('persistentVolumeClaimManagement.messages.noNamespaces')); }
+          } else { ElMessage.error(t('persistentVolumeClaimManagement.messages.fetchNamespacesError')); namespaces.value = []; }
+      } catch (error: any) { console.error("获取命名空间失败:", error); ElMessage.error(t('persistentVolumeClaimManagement.messages.fetchNamespacesError') + `: ${error.message || t('common.error')}`); namespaces.value = []; }
       finally { loading.namespaces = false; }
   }
   
@@ -398,12 +387,12 @@
               console.log(`No PVCs found in namespace '${selectedNamespace.value}' (items is null).`);
               allPvcs.value = []; totalPvcs.value = 0; currentPage.value = 1;
           } else {
-              ElMessage.error(`获取 PVC 数据失败: ${response.message || '无效的响应数据'}`);
+              ElMessage.error(t('persistentVolumeClaimManagement.messages.fetchPVCsError'));
               allPvcs.value = []; totalPvcs.value = 0;
           }
       } catch (error: any) {
           console.error("获取 PVC 数据失败:", error);
-          ElMessage.error(`获取 PVC 数据出错: ${error.message || '网络请求失败'}`);
+          ElMessage.error(t('persistentVolumeClaimManagement.messages.fetchPVCsError'));
           allPvcs.value = []; totalPvcs.value = 0;
       } finally {
           loading.pvcs = false;
@@ -430,10 +419,10 @@
   
   
   // --- Dialog and CRUD Actions ---
-  const handleAddPVC = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning("请先选择一个命名空间"); return; } currentEditPvc.value = null; yamlContent.value = placeholderYaml.value; dialogTitle.value = "创建 PVC (YAML)"; dialogVisible.value = true; };
+  const handleAddPVC = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning(t('persistentVolumeClaimManagement.messages.selectNamespaceWarning')); return; } currentEditPvc.value = null; yamlContent.value = placeholderYaml.value; dialogVisible.value = true; };
   const editPvcYaml = async (pvc: PVCDisplayItem) => { /* ... */
-      ElMessage.info(`使用列表数据填充编辑器 YAML for PVC "${pvc.name}"`);
-      if (!pvc.rawData) { ElMessage.error("无法编辑，缺少原始数据。"); return; }
+      ElMessage.info(t('persistentVolumeClaimManagement.messages.fetchingYaml').replace('{name}', pvc.name));
+      if (!pvc.rawData) { ElMessage.error(t('persistentVolumeClaimManagement.messages.editError')); return; }
       currentEditPvc.value = pvc.rawData;
       // Convert raw API structure *back* to standard K8s PVC for YAML editing
       // This is needed if your API mapping function (ToPVCResponse) significantly changed the structure
@@ -458,7 +447,6 @@
           // status is omitted for editing
       };
       yamlContent.value = yaml.dump(k8sObjectForYaml, { skipInvalid: true }); // skipInvalid helps with undefined fields
-      dialogTitle.value = `编辑 PVC: ${pvc.name} (YAML)`;
       dialogVisible.value = true;
   };
   
@@ -480,14 +468,14 @@
   
        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate
        loading.dialogSave = false; dialogVisible.value = false;
-       const action = currentEditPvc.value ? '更新' : '创建';
-       ElMessage.success(`模拟 PVC ${action}成功`); fetchPvcData();
+       const action = currentEditPvc.value ? t('persistentVolumeClaimManagement.actions.edit') : t('persistentVolumeClaimManagement.actions.create');
+       ElMessage.success(t('persistentVolumeClaimManagement.messages.operationSuccess').replace('{action}', action)); fetchPvcData();
   };
   
   const handleDeletePVC = (pvc: PVCDisplayItem) => { /* ... */
       ElMessageBox.confirm(
-          `确定要删除 PVC "${pvc.name}" (命名空间: ${pvc.namespace}) 吗？请注意 PV 的回收策略。`,
-          '确认删除', { type: 'warning' }
+          t('persistentVolumeClaimManagement.messages.deleteConfirmDetail').replace('{name}', pvc.name).replace('{namespace}', pvc.namespace),
+          t('common.confirm'), { type: 'warning' }
       ).then(async () => {
           loading.pvcs = true;
           try {
@@ -496,10 +484,10 @@
                   method: "delete"
               });
                if (response.code === 200 || response.code === 204 || response.code === 202) {
-                  ElMessage.success(`PVC "${pvc.name}" 已删除`); await fetchPvcData();
-              } else { ElMessage.error(`删除 PVC 失败: ${response.message || '未知错误'}`); loading.pvcs = false; }
-          } catch (error: any) { console.error("删除 PVC 失败:", error); ElMessage.error(`删除 PVC 失败: ${error.response?.data?.message || error.message || '请求失败'}`); loading.pvcs = false; }
-      }).catch(() => ElMessage.info('删除操作已取消'));
+                  ElMessage.success(t('persistentVolumeClaimManagement.messages.deleteSuccess')); await fetchPvcData();
+              } else { ElMessage.error(t('persistentVolumeClaimManagement.messages.deleteFailed')); loading.pvcs = false; }
+          } catch (error: any) { console.error("删除 PVC 失败:", error); ElMessage.error(t('persistentVolumeClaimManagement.messages.deleteFailed')); loading.pvcs = false; }
+      }).catch(() => ElMessage.info(t('persistentVolumeClaimManagement.messages.operationCancelled')));
   };
   
   // --- Lifecycle Hooks ---
@@ -514,34 +502,190 @@
   
   <style lang="scss" scoped>
   /* Using fallback variables directly */
-  $page-padding: 20px; $spacing-md: 15px; $spacing-lg: 20px;
-  $font-size-base: 14px; $font-size-small: 12px; $font-size-large: 16px; $font-size-extra-large: 24px;
+  $page-padding: 24px; $spacing-md: 16px; $spacing-lg: 24px;
+  $font-size-base: 14px; $font-size-small: 12px; $font-size-large: 16px; $font-size-extra-large: 28px;
   $border-radius-base: 4px; $kube-pvc-icon-color: #9b59b6;
   
-  .pvc-page-container { padding: $page-padding; background-color: var(--el-bg-color-page); }
-  .page-breadcrumb { margin-bottom: $spacing-lg; }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: $spacing-md; flex-wrap: wrap; gap: $spacing-md; }
-  .page-title { font-size: $font-size-extra-large; font-weight: 600; color: var(--el-text-color-primary); margin: 0; }
-  .info-alert { margin-bottom: $spacing-lg; background-color: var(--el-color-info-light-9); :deep(.el-alert__description) { font-size: $font-size-small; color: var(--el-text-color-regular); line-height: 1.6; } }
-  .filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-md; margin-bottom: $spacing-lg; padding: $spacing-md; background-color: var(--el-bg-color); border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); }
-  .filter-item { }
+  .pvc-page-container { 
+    padding: $page-padding; 
+    background-color: var(--el-bg-color-page);
+    box-sizing: border-box;
+  }
+  .page-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: $spacing-lg; 
+    flex-wrap: wrap; 
+    gap: $spacing-md;
+  }
+  .page-title { 
+    font-size: $font-size-extra-large; 
+    font-weight: 600; 
+    color: var(--el-text-color-primary); 
+    margin: 0;
+  }
+  .filter-bar { 
+    display: flex; 
+    align-items: center; 
+    flex-wrap: wrap; 
+    gap: $spacing-md; 
+    margin-bottom: $spacing-lg; 
+    padding: $spacing-md; 
+    background-color: var(--el-bg-color); 
+    border-radius: $border-radius-base; 
+    border: 1px solid var(--el-border-color-lighter);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  }
   .namespace-select { width: 240px; }
   .search-input { width: 300px; }
   
+  .pvc-table-card {
+    margin-bottom: $spacing-lg;
+    border-radius: $border-radius-base;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--el-border-color-lighter);
+    
+    :deep(.el-card__body) {
+      padding: 0;
+    }
+  }
+  
   .pvc-table {
-     border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); overflow: hidden;
-      :deep(th.el-table__cell) { background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-weight: 600; font-size: $font-size-small; }
-      :deep(td.el-table__cell) { padding: 8px 0; font-size: $font-size-base; vertical-align: middle; }
-     .pvc-icon { margin-right: 8px; color: $kube-pvc-icon-color; vertical-align: middle; font-size: 18px; position: relative; top: -1px; }
-     .pvc-name { font-weight: 500; vertical-align: middle; color: var(--el-text-color-regular); }
-     .status-tag { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; height: 22px; line-height: 20px; font-size: $font-size-small; }
+     border: none;
+     border-radius: 0;
+     overflow: hidden;
+     :deep(th.el-table__cell) { 
+       background-color: var(--el-fill-color-lighter); 
+       color: var(--el-text-color-secondary); 
+       font-weight: 600; 
+       font-size: $font-size-small;
+       border-bottom: 1px solid var(--el-border-color-light);
+     }
+     :deep(td.el-table__cell) { 
+       padding: 12px 0; 
+       font-size: $font-size-base; 
+       vertical-align: middle;
+       border-bottom: 1px solid var(--el-border-color-lighter);
+     }
+     :deep(.el-table__inner-wrapper::before) {
+       height: 0;
+     }
+     .pvc-icon { 
+       margin-right: 8px; 
+       color: $kube-pvc-icon-color; 
+       vertical-align: middle; 
+       font-size: 18px; 
+       position: relative; 
+       top: -1px; 
+     }
+     .pvc-name { 
+       font-weight: 500; 
+       vertical-align: middle; 
+       color: var(--el-text-color-primary); 
+     }
+     .status-tag { 
+       display: inline-flex; 
+       align-items: center; 
+       gap: 4px; 
+       padding: 2px 8px; 
+       height: 24px; 
+       line-height: 20px; 
+       font-size: $font-size-small;
+       border-radius: 12px;
+     }
      .status-icon { font-size: 12px; }
      .is-loading { animation: rotating 1.5s linear infinite; }
      @keyframes rotating { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   }
   
-  .el-table .el-button.is-link { font-size: 14px; padding: 4px; margin: 0 3px; vertical-align: middle; }
-  .pagination-container { display: flex; justify-content: flex-end; margin-top: $spacing-lg; }
-  .yaml-editor-placeholder { border: 1px dashed var(--el-border-color); padding: 20px; margin-top: 10px; min-height: 350px; max-height: 60vh; background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-family: monospace; white-space: pre-wrap; overflow: auto; font-size: 13px; line-height: 1.5; }
-  .dialog-footer { text-align: right; padding-top: 10px; }
+  .el-table .el-button.is-link { 
+    font-size: 14px; 
+    padding: 4px; 
+    margin: 0 3px; 
+    vertical-align: middle;
+  }
+  .pagination-container { 
+    display: flex; 
+    justify-content: flex-end; 
+    margin-top: $spacing-lg;
+    padding: 0 16px 16px 16px;
+  }
+  .yaml-editor-placeholder { 
+    border: 1px dashed var(--el-border-color); 
+    padding: 20px; 
+    margin-top: 10px; 
+    min-height: 350px; 
+    max-height: 60vh; 
+    background-color: var(--el-fill-color-lighter); 
+    color: var(--el-text-color-secondary); 
+    font-family: monospace; 
+    white-space: pre-wrap; 
+    overflow: auto; 
+    font-size: 13px; 
+    line-height: 1.5; 
+    border-radius: $border-radius-base;
+  }
+  .dialog-footer { 
+    text-align: right; 
+    padding-top: 16px;
+  }
+
+  /* 按钮样式 - 透明背景 + 彩色边框 */
+  :deep(.el-button--primary) {
+    background-color: transparent;
+    border-color: #3b82f6;
+    color: #3b82f6;
+  }
+
+  :deep(.el-button--primary:hover) {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: #ffffff;
+  }
+
+  :deep(.el-button--primary:active),
+  :deep(.el-button--primary.is-active) {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+    color: #ffffff;
+  }
+
+  :deep(.el-button--success) {
+    background-color: transparent;
+    border-color: #10b981;
+    color: #10b981;
+  }
+
+  :deep(.el-button--success:hover) {
+    background-color: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+  }
+
+  :deep(.el-button--success:active),
+  :deep(.el-button--success.is-active) {
+    background-color: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
+  }
+
+  :deep(.el-button--danger) {
+    background-color: transparent;
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  :deep(.el-button--danger:hover) {
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+  }
+
+  :deep(.el-button--danger:active),
+  :deep(.el-button--danger.is-active) {
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+  }
   </style>

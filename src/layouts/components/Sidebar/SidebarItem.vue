@@ -26,27 +26,33 @@ const titleMap: Record<string, string> = {
   '运维导航': 'menu.opsNavigation',
   '集群': 'menu.cluster',
   '集群管理': 'menu.clusterManagement',
+  '集群事件': 'menu.clusterEvents',
+  '自定义资源': 'menu.crd',
   '节点': 'menu.node',
   '命名空间': 'menu.namespace',
   '工作负载': 'menu.workloads',
-  'pod': 'menu.pod',
-  'deployment': 'menu.deployment',
+  'Pod': 'menu.pod',
+  'Deployment': 'menu.deployment',
   '存储': 'menu.storage',
-  'pv': 'menu.pv',
-  'pvc': 'menu.pvc',
+  'PV': 'menu.pv',
+  'PVC': 'menu.pvc',
   '网络': 'menu.network',
-  'service': 'menu.service',
-  'ingress': 'menu.ingress',
+  'Service': 'menu.service',
+  'Ingress': 'menu.ingress',
   '配置管理': 'menu.config',
-  'configmap': 'menu.configmap',
-  'secret': 'menu.secret',
+  'ConfigMap': 'menu.configmap',
+  'Secret': 'menu.secret',
   '项目管理': 'menu.project',
   '中文文档': 'menu.chineseDocs',
   '我的博客': 'menu.myBlog',
   '技术栈': 'menu.techStack',
-  '权限': 'menu.permission',
-  '页面级': 'menu.pageLevel',
-  '按钮级': 'menu.buttonLevel'
+  '权限演示': 'menu.permission',
+  '页面级权限': 'menu.pageLevel',
+  '按钮级权限': 'menu.buttonLevel',
+  '系统管理': 'menu.admin',
+  '用户管理': 'menu.userManagement',
+  '角色管理': 'menu.roleManagement',
+  '系统设置': 'menu.systemSettings'
 }
 
 // 获取国际化标题
@@ -113,12 +119,8 @@ const resolvePath = (routePath: string) => {
       <span v-if="props.item.meta?.title">{{ getI18nTitle(props.item.meta.title) }}</span>
     </template>
     <template v-if="props.item.children">
-      <SidebarItem
-        v-for="child in showingChildren"
-        :key="child.path"
-        :item="child"
-        :base-path="resolvePath(child.path)"
-      />
+      <SidebarItem v-for="child in showingChildren" :key="child.path" :item="child"
+        :base-path="resolvePath(child.path)" />
     </template>
   </el-sub-menu>
 </template>

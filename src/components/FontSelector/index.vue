@@ -39,6 +39,7 @@ const availableFonts = computed(() => {
 })
 
 const currentFontLabel = computed(() => {
+  // 直接显示当前字体的标签，字体切换逻辑由 useFont 处理
   return t(`font.${currentFont.value}`)
 })
 

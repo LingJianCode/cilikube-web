@@ -1,15 +1,8 @@
 <template>
   <div class="ingress-page-container">
-    <!-- Breadcrumbs -->
-    <el-breadcrumb separator="/" class="page-breadcrumb">
-      <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-      <el-breadcrumb-item>网络管理</el-breadcrumb-item>
-      <el-breadcrumb-item>Ingresses</el-breadcrumb-item>
-    </el-breadcrumb>
-
     <!-- Header: Title & Create Button -->
     <div class="page-header">
-      <h1 class="page-title">Ingresses 列表</h1>
+      <h1 class="page-title">{{ $t('ingressManagement.title') }}</h1>
        <el-button
          type="primary"
          :icon="PlusIcon"
@@ -17,25 +10,15 @@
          :loading="loading.page"
          :disabled="!selectedNamespace"
        >
-         创建 Ingress (YAML)
+         {{ $t('ingressManagement.actions.create') }}
        </el-button>
     </div>
-
-     <!-- Cluster Knowledge Alert -->
-     <el-alert
-       title="关于 Ingresses"
-       type="info"
-       show-icon
-       :closable="true"
-       class="info-alert"
-       description="Ingress 是对集群中服务的外部访问进行管理的 API 对象，典型的访问方式是 HTTP。Ingress 可以提供负载均衡、SSL 终端和基于名称的虚拟托管。Ingress 公开了从集群外部到集群内 Service 的 HTTP 和 HTTPS 路由。 流量路由由 Ingress 资源上定义的规则控制。需要部署 Ingress 控制器 (如 Nginx Ingress Controller, Traefik) 来使 Ingress 资源生效。"
-     />
 
     <!-- Filter Bar: Namespace, Search, Refresh -->
     <div class="filter-bar">
         <el-select
             v-model="selectedNamespace"
-            placeholder="请选择命名空间"
+            :placeholder="$t('ingressManagement.filterNamespace')"
             @change="handleNamespaceChange"
             filterable
             :loading="loading.namespaces"
@@ -45,14 +28,14 @@
             <el-option v-for="ns in namespaces" :key="ns" :label="ns" :value="ns" />
              <template #empty>
                 <div style="padding: 10px; text-align: center; color: #999;">
-                    {{ loading.namespaces ? '正在加载...' : '无可用命名空间' }}
+                    {{ loading.namespaces ? $t('common.loading') : $t('ingressManagement.messages.noNamespaces') }}
                 </div>
             </template>
         </el-select>
 
         <el-input
             v-model="searchQuery"
-            placeholder="搜索 Ingress 名称 / Host / Class"
+            :placeholder="$t('ingressManagement.searchPlaceholder')"
             :prefix-icon="SearchIcon"
             clearable
             @input="handleSearchDebounced"
@@ -60,7 +43,7 @@
             :disabled="!selectedNamespace || loading.ingresses"
         />
 
-        <el-tooltip content="刷新列表" placement="top">
+        <el-tooltip :content="$t('common.refresh')" placement="top">
             <el-button
               :icon="RefreshIcon"
               circle
@@ -71,32 +54,33 @@
         </el-tooltip>
     </div>
 
-    <!-- Ingresses Table -->
-    <el-table
-        :data="paginatedData"
-        v-loading="loading.ingresses"
-        border
-        stripe
-        style="width: 100%"
-        @sort-change="handleSortChange"
-        class="ingress-table"
-        :default-sort="{ prop: 'createdAt', order: 'descending' }"
-        row-key="uid"
-    >
-        <el-table-column prop="name" label="名称" min-width="250" sortable="custom" fixed show-overflow-tooltip>
+    <!-- Ingresses Table Card -->
+    <el-card class="ingress-table-card" shadow="hover">
+      <el-table
+          :data="paginatedData"
+          v-loading="loading.ingresses"
+          border
+          stripe
+          style="width: 100%"
+          @sort-change="handleSortChange"
+          class="ingress-table"
+          :default-sort="{ prop: 'createdAt', order: 'descending' }"
+          row-key="uid"
+      >
+        <el-table-column :label="$t('ingressManagement.columns.name')" prop="name" min-width="250" sortable="custom" fixed show-overflow-tooltip>
              <template #default="{ row }">
                 <el-icon class="ingress-icon"><ConnectionIcon /></el-icon>
                 <span class="ingress-name">{{ row.name }}</span>
             </template>
         </el-table-column>
-        <el-table-column prop="namespace" label="命名空间" min-width="150" sortable="custom" show-overflow-tooltip />
-        <el-table-column prop="ingressClassName" label="Class" min-width="150" sortable="custom" show-overflow-tooltip>
+        <el-table-column :label="$t('ingressManagement.columns.namespace')" prop="namespace" min-width="150" sortable="custom" show-overflow-tooltip />
+        <el-table-column :label="$t('ingressManagement.columns.class')" prop="ingressClassName" min-width="150" sortable="custom" show-overflow-tooltip>
              <template #default="{ row }">
                 <el-tag v-if="row.ingressClassName" size="small" type="info">{{ row.ingressClassName }}</el-tag>
                 <span v-else>-</span>
             </template>
         </el-table-column>
-         <el-table-column prop="hosts" label="Hosts" min-width="250" show-overflow-tooltip>
+         <el-table-column :label="$t('ingressManagement.columns.hosts')" prop="hosts" min-width="250" show-overflow-tooltip>
               <template #default="{ row }">
                  <div v-if="row.hosts && row.hosts.length > 0">
                      <span v-for="(host, index) in row.hosts" :key="index">
@@ -107,17 +91,17 @@
                  <span v-else>*</span> <!-- Indicate default backend or rules without host -->
              </template>
          </el-table-column>
-         <el-table-column prop="address" label="Address (LoadBalancer IP)" min-width="180" show-overflow-tooltip>
+         <el-table-column :label="$t('ingressManagement.columns.address')" prop="address" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">
                  {{ row.address || '-' }}
              </template>
          </el-table-column>
-        <el-table-column prop="ports" label="Ports" min-width="100" align="center">
+        <el-table-column :label="$t('ingressManagement.columns.ports')" prop="ports" min-width="100" align="center">
             <template #default>
                <el-tag size="small" type="info" effect="light">80, 443</el-tag> <!-- Typically 80/443 for Ingress -->
             </template>
         </el-table-column>
-        <el-table-column prop="rules" label="Rules" min-width="300" show-overflow-tooltip>
+        <el-table-column :label="$t('ingressManagement.columns.rules')" prop="rules" min-width="300" show-overflow-tooltip>
              <template #default="{ row }">
                 <div v-if="row.rules && row.rules.length > 0" class="rules-column">
                    <div v-for="(rule, index) in row.rules" :key="index" class="rule-item">
@@ -132,25 +116,25 @@
                  <span v-else>-</span>
              </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" min-width="180" sortable="custom" />
-        <el-table-column label="操作" width="130" align="center" fixed="right">
+        <el-table-column :label="$t('ingressManagement.columns.createdAt')" prop="createdAt" min-width="180" sortable="custom" />
+        <el-table-column :label="$t('ingressManagement.columns.actions')" width="130" align="center" fixed="right">
             <template #default="{ row }">
-                 <el-tooltip content="编辑 YAML" placement="top">
+                 <el-tooltip :content="$t('ingressManagement.actions.editYaml')" placement="top">
                     <el-button link type="primary" :icon="EditPenIcon" @click="editIngressYaml(row)" />
                 </el-tooltip>
-                <el-tooltip content="删除" placement="top">
+                <el-tooltip :content="$t('common.delete')" placement="top">
                     <el-button link type="danger" :icon="DeleteIcon" @click="handleDeleteIngress(row)" />
                 </el-tooltip>
             </template>
         </el-table-column>
          <template #empty>
-          <el-empty v-if="!loading.ingresses && !selectedNamespace" description="请先选择一个命名空间以加载 Ingresses" image-size="100" />
-          <el-empty v-else-if="!loading.ingresses && paginatedData.length === 0" :description="`在命名空间 '${selectedNamespace}' 中未找到 Ingresses`" image-size="100" />
+          <el-empty v-if="!loading.ingresses && !selectedNamespace" :description="$t('ingressManagement.messages.selectNamespace')" image-size="100" />
+          <el-empty v-else-if="!loading.ingresses && paginatedData.length === 0" :description="`${$t('ingressManagement.messages.noIngresses')}`" image-size="100" />
          </template>
     </el-table>
 
-    <!-- Pagination -->
-    <div class="pagination-container" v-if="!loading.ingresses && totalIngresses > 0">
+      <!-- Pagination -->
+      <div class="pagination-container" v-if="!loading.ingresses && totalIngresses > 0">
         <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
@@ -162,22 +146,23 @@
             @current-change="handlePageChange"
             :disabled="loading.ingresses"
         />
-    </div>
+      </div>
+    </el-card>
 
     <!-- Create/Edit Dialog (YAML focus) -->
     <el-dialog :title="dialogTitle" v-model="dialogVisible" width="70%" :close-on-click-modal="false">
        <el-alert type="info" :closable="false" style="margin-bottom: 20px;">
-         请在此处粘贴或编辑 Ingress 的 YAML 配置。确保 YAML 中的 `namespace` 与当前选定的命名空间 (`${selectedNamespace || '未选定'}`) 匹配或省略。
+         {{ $t('ingressManagement.messages.yamlEditTip') }}
        </el-alert>
        <!-- Integrate a YAML editor component here -->
        <div class="yaml-editor-placeholder">
-            YAML 编辑器占位符
+            {{ $t('ingressManagement.messages.yamlEditorPlaceholder') }}
             <pre>{{ yamlContent || placeholderYaml }}</pre>
        </div>
       <template #footer>
         <div class="dialog-footer">
-            <el-button @click="dialogVisible = false">取 消</el-button>
-            <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">应用 YAML</el-button>
+            <el-button @click="dialogVisible = false">{{ $t('common.cancel') }}</el-button>
+            <el-button type="primary" @click="handleSaveYaml" :loading="loading.dialogSave">{{ $t('ingressManagement.actions.applyYaml') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -188,6 +173,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { useI18n } from 'vue-i18n'
 import { kubernetesRequest, fetchNamespaces, KubernetesApiResponse } from "@/utils/api-config"
 import dayjs from "dayjs"
 import { debounce } from 'lodash-es'
@@ -197,6 +183,8 @@ import {
     Plus as PlusIcon, Search as SearchIcon, Refresh as RefreshIcon, Connection as ConnectionIcon,
     EditPen as EditPenIcon, Delete as DeleteIcon, Right
 } from '@element-plus/icons-vue'
+
+const { t } = useI18n()
 
 // --- Interfaces ---
 // K8s Structures based on API sample (networking.k8s.io/v1)
@@ -255,9 +243,15 @@ const loading = reactive({
 
 // Dialog state (YAML focus)
 const dialogVisible = ref(false)
-const dialogTitle = ref("创建 Ingress (YAML)");
 const currentEditIngress = ref<IngressApiItem | null>(null);
 const yamlContent = ref("");
+
+const dialogTitle = computed(() => 
+  currentEditIngress.value 
+    ? `${t('ingressManagement.actions.edit')}: ${currentEditIngress.value.metadata.name} (YAML)`
+    : t('ingressManagement.messages.createIngressTitle')
+);
+
 const placeholderYaml = computed(() => `apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -384,7 +378,7 @@ const fetchNamespacesList = async () => {
         if (namespaceList.length > 0 && !selectedNamespace.value) {
              selectedNamespace.value = namespaceList.find(ns => ns === 'default') || namespaceList[0];
         } else if (namespaceList.length === 0) { 
-            ElMessage.warning("未找到任何命名空间。"); 
+            ElMessage.warning(t('ingressManagement.messages.noNamespaces')); 
         }
     } catch (error: any) { 
         ElMessage.error(error.message); 
@@ -428,7 +422,7 @@ const fetchIngressData = async () => {
                 // ElMessage.warning('获取到空的 Ingress 数据');
             }
         } else {
-            ElMessage.error(`获取 Ingress 数据失败: ${response.message || '未知错误'}`);
+            ElMessage.error(`${t('ingressManagement.messages.fetchIngressesError')}: ${response.message || t('common.error')}`);
             allIngresses.value = [];
             totalIngresses.value = 0;
         }
@@ -436,9 +430,9 @@ const fetchIngressData = async () => {
         console.error("获取 Ingress 数据失败:", error);
         // Handle 404 specifically for Ingress if the API group isn't enabled
         if (error.response?.status === 404) {
-            ElMessage.warning(`获取 Ingress 失败: 请确保 Ingress API (networking.k8s.io/v1) 在集群中已启用，并且您有读取权限。`);
+            ElMessage.warning(`${t('ingressManagement.messages.fetchIngressesError')}: 请确保 Ingress API (networking.k8s.io/v1) 在集群中已启用，并且您有读取权限。`);
         } else {
-            ElMessage.error(`获取 Ingress 数据出错: ${error.message || '网络请求失败'}`);
+            ElMessage.error(`${t('ingressManagement.messages.fetchIngressesError')}: ${error.message || t('common.error')}`);
         }
         allIngresses.value = []; totalIngresses.value = 0;
     } finally {
@@ -455,29 +449,28 @@ const handleSortChange = ({ prop, order }: { prop: string | null; order: 'ascend
 
 
 // --- Dialog and CRUD Actions ---
-const handleAddIngress = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning("请先选择一个命名空间"); return; } currentEditIngress.value = null; yamlContent.value = placeholderYaml.value; dialogTitle.value = "创建 Ingress (YAML)"; dialogVisible.value = true; };
+const handleAddIngress = () => { /* ... */ if (!selectedNamespace.value) { ElMessage.warning(t('ingressManagement.messages.selectNamespaceWarning')); return; } currentEditIngress.value = null; yamlContent.value = placeholderYaml.value; dialogVisible.value = true; };
 const editIngressYaml = async (ingress: IngressDisplayItem) => { /* ... */
-    ElMessage.info(`模拟: 获取 Ingress "${ingress.name}" 的 YAML`);
+    ElMessage.info(`${t('ingressManagement.messages.fetchingYaml').replace('{name}', ingress.name)}`);
     currentEditIngress.value = ingress.rawData;
     yamlContent.value = ingress.rawData ? yaml.dump(ingress.rawData) : placeholderYaml.value;
-    dialogTitle.value = `编辑 Ingress: ${ingress.name} (YAML)`;
     dialogVisible.value = true;
 };
 
 const handleSaveYaml = async () => { /* ... */
-    if (!selectedNamespace.value && !currentEditIngress.value?.metadata.namespace) { ElMessage.error("无法确定目标命名空间。"); return; }
+    if (!selectedNamespace.value && !currentEditIngress.value?.metadata.namespace) { ElMessage.error(t('ingressManagement.messages.noNamespaces')); return; }
     loading.dialogSave = true;
     // --- Replace with actual YAML editor interaction and API call (POST/PUT) ---
      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate
      loading.dialogSave = false; dialogVisible.value = false;
-     const action = currentEditIngress.value ? '更新' : '创建';
-     ElMessage.success(`模拟 Ingress ${action}成功`); fetchIngressData();
+     const action = currentEditIngress.value ? t('common.edit') : t('common.add');
+     ElMessage.success(t('ingressManagement.messages.operationSuccess').replace('{action}', action)); fetchIngressData();
 };
 
 const handleDeleteIngress = (ingress: IngressDisplayItem) => { /* ... */
     ElMessageBox.confirm(
-        `确定要删除 Ingress "${ingress.name}" (命名空间: ${ingress.namespace}) 吗？`,
-        '确认删除', { type: 'warning' }
+        t('ingressManagement.messages.deleteConfirmDetail').replace('{name}', ingress.name).replace('{namespace}', ingress.namespace),
+        t('common.confirm'), { type: 'warning' }
     ).then(async () => {
         loading.ingresses = true;
         try {
@@ -486,10 +479,10 @@ const handleDeleteIngress = (ingress: IngressDisplayItem) => { /* ... */
                 method: "delete"
             });
              if (response.code === 200 || response.code === 204 || response.code === 202) {
-                ElMessage.success(`Ingress "${ingress.name}" 已删除`); await fetchIngressData();
-            } else { ElMessage.error(`删除 Ingress 失败: ${response.message || '未知错误'}`); loading.ingresses = false; }
-        } catch (error: any) { console.error("删除 Ingress 失败:", error); ElMessage.error(`删除 Ingress 失败: ${error.response?.data?.message || error.message || '请求失败'}`); loading.ingresses = false; }
-    }).catch(() => ElMessage.info('删除操作已取消'));
+                ElMessage.success(`Ingress "${ingress.name}" ${t('common.delete')}${t('common.success')}`); await fetchIngressData();
+            } else { ElMessage.error(`${t('ingressManagement.messages.deleteFailed')}: ${response.message || t('common.error')}`); loading.ingresses = false; }
+        } catch (error: any) { console.error("删除 Ingress 失败:", error); ElMessage.error(`${t('ingressManagement.messages.deleteFailed')}: ${error.response?.data?.message || error.message || '请求失败'}`); loading.ingresses = false; }
+    }).catch(() => ElMessage.info(t('ingressManagement.messages.operationCancelled')));
 };
 
 // --- Lifecycle Hooks ---
@@ -504,26 +497,88 @@ onMounted(async () => { /* ... */
 
 <style lang="scss" scoped>
 /* Using fallback variables directly */
-$page-padding: 20px; $spacing-md: 15px; $spacing-lg: 20px;
-$font-size-base: 14px; $font-size-small: 12px; $font-size-large: 16px; $font-size-extra-large: 24px;
+$page-padding: 24px; $spacing-md: 16px; $spacing-lg: 24px;
+$font-size-base: 14px; $font-size-small: 12px; $font-size-large: 16px; $font-size-extra-large: 28px;
 $border-radius-base: 4px; $kube-ingress-icon-color: #1ABC9C; // Example Turquoise
 
-.ingress-page-container { padding: $page-padding; background-color: var(--el-bg-color-page); }
-.page-breadcrumb { margin-bottom: $spacing-lg; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: $spacing-md; flex-wrap: wrap; gap: $spacing-md; }
-.page-title { font-size: $font-size-extra-large; font-weight: 600; color: var(--el-text-color-primary); margin: 0; }
-.info-alert { margin-bottom: $spacing-lg; background-color: var(--el-color-info-light-9); :deep(.el-alert__description) { font-size: $font-size-small; color: var(--el-text-color-regular); line-height: 1.6; } }
-.filter-bar { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-md; margin-bottom: $spacing-lg; padding: $spacing-md; background-color: var(--el-bg-color); border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); }
-.filter-item { }
+.ingress-page-container { 
+  padding: $page-padding; 
+  background-color: var(--el-bg-color-page);
+  box-sizing: border-box;
+}
+.page-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  margin-bottom: $spacing-lg; 
+  flex-wrap: wrap; 
+  gap: $spacing-md;
+}
+.page-title { 
+  font-size: $font-size-extra-large; 
+  font-weight: 600; 
+  color: var(--el-text-color-primary); 
+  margin: 0;
+}
+.filter-bar { 
+  display: flex; 
+  align-items: center; 
+  flex-wrap: wrap; 
+  gap: $spacing-md; 
+  margin-bottom: $spacing-lg; 
+  padding: $spacing-md; 
+  background-color: var(--el-bg-color); 
+  border-radius: $border-radius-base; 
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
 .namespace-select { width: 240px; }
 .search-input { width: 300px; }
 
+.ingress-table-card {
+  margin-bottom: $spacing-lg;
+  border-radius: $border-radius-base;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--el-border-color-lighter);
+  
+  :deep(.el-card__body) {
+    padding: 0;
+  }
+}
+
 .ingress-table {
-   border-radius: $border-radius-base; border: 1px solid var(--el-border-color-lighter); overflow: hidden;
-    :deep(th.el-table__cell) { background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-weight: 600; font-size: $font-size-small; }
-    :deep(td.el-table__cell) { padding: 8px 0; font-size: $font-size-base; vertical-align: middle; }
-   .ingress-icon { margin-right: 8px; color: $kube-ingress-icon-color; vertical-align: middle; font-size: 18px; position: relative; top: -1px; }
-   .ingress-name { font-weight: 500; vertical-align: middle; color: var(--el-text-color-regular); }
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  :deep(th.el-table__cell) { 
+    background-color: var(--el-fill-color-lighter); 
+    color: var(--el-text-color-secondary); 
+    font-weight: 600; 
+    font-size: $font-size-small;
+    border-bottom: 1px solid var(--el-border-color-light);
+  }
+  :deep(td.el-table__cell) { 
+    padding: 12px 0; 
+    font-size: $font-size-base; 
+    vertical-align: middle;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+  }
+  :deep(.el-table__inner-wrapper::before) {
+    height: 0;
+  }
+  .ingress-icon { 
+    margin-right: 8px; 
+    color: $kube-ingress-icon-color; 
+    vertical-align: middle; 
+    font-size: 18px; 
+    position: relative; 
+    top: -1px; 
+  }
+  .ingress-name { 
+    font-weight: 500; 
+    vertical-align: middle; 
+    color: var(--el-text-color-primary); 
+  }
 
     .rules-column {
         font-size: $font-size-small;
@@ -541,8 +596,35 @@ $border-radius-base: 4px; $kube-ingress-icon-color: #1ABC9C; // Example Turquois
     }
 }
 
-.el-table .el-button.is-link { font-size: 14px; padding: 4px; margin: 0 3px; vertical-align: middle; }
-.pagination-container { display: flex; justify-content: flex-end; margin-top: $spacing-lg; }
-.yaml-editor-placeholder { border: 1px dashed var(--el-border-color); padding: 20px; margin-top: 10px; min-height: 350px; max-height: 60vh; background-color: var(--el-fill-color-lighter); color: var(--el-text-color-secondary); font-family: monospace; white-space: pre-wrap; overflow: auto; font-size: 13px; line-height: 1.5; }
-.dialog-footer { text-align: right; padding-top: 10px; }
+.el-table .el-button.is-link { 
+  font-size: 14px; 
+  padding: 4px; 
+  margin: 0 3px; 
+  vertical-align: middle;
+}
+.pagination-container { 
+  display: flex; 
+  justify-content: flex-end; 
+  margin-top: $spacing-lg;
+  padding: 0 16px 16px 16px;
+}
+.yaml-editor-placeholder { 
+  border: 1px dashed var(--el-border-color); 
+  padding: 20px; 
+  margin-top: 10px; 
+  min-height: 350px; 
+  max-height: 60vh; 
+  background-color: var(--el-fill-color-lighter); 
+  color: var(--el-text-color-secondary); 
+  font-family: monospace; 
+  white-space: pre-wrap; 
+  overflow: auto; 
+  font-size: 13px; 
+  line-height: 1.5; 
+  border-radius: $border-radius-base;
+}
+.dialog-footer { 
+  text-align: right; 
+  padding-top: 16px;
+}
 </style>

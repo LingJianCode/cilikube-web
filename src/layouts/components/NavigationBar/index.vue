@@ -7,7 +7,9 @@ import { useAppStore } from "@/store/modules/app"
 import { useSettingsStore } from "@/store/modules/settings"
 import { useUserStore } from "@/store/modules/user"
 import { useClusterStore, type ClusterInfo } from "@/store/modules/clusterStore" // 导入 cluster store
-import { UserFilled, ArrowDown, OfficeBuilding, Refresh, Loading } from "@element-plus/icons-vue" // 添加 Refresh 和 Loading
+import { usePermission } from "@/composables/usePermission" // 导入权限管理
+import { UserFilled, ArrowDown, OfficeBuilding, Refresh, Loading, User, SwitchButton, Setting } from "@element-plus/icons-vue" // 添加 Refresh 和 Loading
+import { buildAvatarUrl } from "@/utils/avatar" // 导入头像URL构建工具
 import Hamburger from "../Hamburger/index.vue"
 import Breadcrumb from "../Breadcrumb/index.vue"
 import Sidebar from "../Sidebar/index.vue"
@@ -15,7 +17,6 @@ import Notify from "@/components/Notify/index.vue"
 import ThemeSwitch from "@/components/ThemeSwitch/index.vue"
 import Screenfull from "@/components/Screenfull/index.vue"
 import SearchMenu from "@/components/SearchMenu/index.vue"
-import FontSelector from "@/components/FontSelector/index.vue"
 import LanguageSelector from "@/components/LanguageSelector/index.vue"
 import { useDevice } from "@/hooks/useDevice"
 import { useLayoutMode } from "@/hooks/useLayoutMode"
@@ -30,12 +31,41 @@ const userStore = useUserStore()
 const settingsStore = useSettingsStore()
 const clusterStore = useClusterStore() // 使用 cluster store
 
-const { showNotify, showThemeSwitch, showScreenfull, showSearchMenu, showFontSelector } = storeToRefs(settingsStore)
-const { availableClusters, selectedClusterName, loadingClusters } = storeToRefs(clusterStore) // 从 store 获取集群状态
+const { showNotify, showThemeSwitch, showScreenfull, showSearchMenu } = storeToRefs(settingsStore)
+const { availableClusters, loadingClusters } = storeToRefs(clusterStore) // 从 store 获取集群状态
+const { userInfo, username } = storeToRefs(userStore) // 获取响应式的用户信息
+
+// 权限管理
+const { currentRole, canAccessAdmin } = usePermission()
+
+// 计算角色显示名称
+const currentRoleDisplayName = computed(() => {
+  const role = currentRole.value
+  if (role === 'admin') return t('admin.userManagement.roles.admin')
+  if (role === 'editor') return t('admin.userManagement.roles.editor')
+  if (role === 'viewer') return t('admin.userManagement.roles.viewer')
+  return t('admin.userManagement.roles.unknown')
+})
+
+// 计算用户头像URL
+const userAvatarUrl = computed(() => {
+  const avatarUrl = userInfo.value?.avatar_url
+  return avatarUrl ? buildAvatarUrl(avatarUrl) : undefined
+})
 
 /** 切换侧边栏 */
 const toggleSidebar = () => {
   appStore.toggleSidebar(false)
+}
+
+/** 跳转到个人资料页面 */
+const goToProfile = () => {
+  router.push("/profile")
+}
+
+/** 跳转到系统管理页面 */
+const goToAdmin = () => {
+  router.push("/admin")
 }
 
 /** 登出 */
@@ -93,7 +123,7 @@ onMounted(() => {
       <SearchMenu v-if="showSearchMenu" class="right-menu-item" />
       <Screenfull v-if="showScreenfull" class="right-menu-item" />
       <LanguageSelector class="right-menu-item" />
-      <FontSelector v-if="showFontSelector" class="right-menu-item" />
+
       <ThemeSwitch v-if="showThemeSwitch" class="right-menu-item" />
       <Notify v-if="showNotify" class="right-menu-item" />
 
@@ -135,13 +165,29 @@ onMounted(() => {
       </el-dropdown>
       <el-dropdown class="right-menu-item">
         <div class="right-menu-avatar">
-          <el-avatar :icon="UserFilled" :size="30" />
-          <span>{{ userStore.username }}</span>
+          <el-avatar 
+            :src="userAvatarUrl" 
+            :icon="userAvatarUrl ? undefined : UserFilled" 
+            :size="30" 
+          />
+          <div class="user-info">
+            <span class="username">{{ username }}</span>
+            <span class="user-role">{{ currentRoleDisplayName }}</span>
+          </div>
         </div>
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item @click="goToProfile">
+              <el-icon style="margin-right: 8px;"><User /></el-icon>
+              <span>{{ t('actions.profile') }}</span>
+            </el-dropdown-item>
+            <el-dropdown-item v-if="canAccessAdmin" @click="goToAdmin">
+              <el-icon style="margin-right: 8px;"><Setting /></el-icon>
+              <span>{{ t('menu.admin') }}</span>
+            </el-dropdown-item>
             <el-dropdown-item divided @click="logout">
-              <span style="display: block">{{ t('actions.logout') }}</span>
+              <el-icon style="margin-right: 8px;"><SwitchButton /></el-icon>
+              <span>{{ t('actions.logout') }}</span>
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -152,9 +198,9 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .navigation-bar {
-  height: var(--v3-navigationbar-height);
+  height: var(--ck-navigationbar-height);
   overflow: hidden;
-  color: var(--v3-navigationbar-text-color);
+  color: var(--ck-navigationbar-text-color);
   display: flex;
   justify-content: space-between;
   .hamburger {
@@ -202,6 +248,21 @@ onMounted(() => {
         }
         span { // 用户名或通用文本
           font-size: 16px;
+        }
+        .user-info {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          .username {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.2;
+          }
+          .user-role {
+            font-size: 12px;
+            color: var(--el-text-color-secondary);
+            line-height: 1.2;
+          }
         }
       }
       // 集群选择器特定样式调整

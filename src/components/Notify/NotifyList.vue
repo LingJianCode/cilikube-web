@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useI18n } from "vue-i18n"
 import { type ListItem } from "./data"
 
 interface Props {
@@ -6,6 +7,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -15,8 +17,8 @@ const props = defineProps<Props>()
       <div class="card-header">
         <div>
           <span>
-            <span class="card-title">{{ item.title }}</span>
-            <el-tag v-if="item.extra" :type="item.status" effect="plain" size="small">{{ item.extra }}</el-tag>
+            <span class="card-title">{{ t(item.title) }}</span>
+            <el-tag v-if="item.extra" :type="item.status" effect="plain" size="small">{{ t(item.extra) }}</el-tag>
           </span>
           <div class="card-time">{{ item.datetime }}</div>
         </div>
@@ -26,7 +28,7 @@ const props = defineProps<Props>()
       </div>
     </template>
     <div class="card-body">
-      {{ item.description ?? "No Data" }}
+      {{ item.description ? t(item.description) : "No Data" }}
     </div>
   </el-card>
 </template>

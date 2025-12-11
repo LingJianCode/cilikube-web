@@ -54,8 +54,13 @@ const defaultSettings: LayoutSettings = {
   showWatermark: true,
   showGreyMode: false,
   showColorWeakness: false,
-  fontFamily: "default"
+  fontFamily: "maple-mono"
 }
 
 /** 项目配置 */
-export const layoutSettings: LayoutSettings = { ...defaultSettings, ...getConfigLayout() }
+export const layoutSettings: LayoutSettings = { 
+  ...defaultSettings, 
+  ...getConfigLayout(),
+  // 强制显示 Footer
+  showFooter: true
+}

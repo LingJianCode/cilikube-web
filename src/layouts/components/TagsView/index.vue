@@ -26,27 +26,44 @@ const titleMap: Record<string, string> = {
   '运维导航': 'menu.opsNavigation',
   '集群': 'menu.cluster',
   '集群管理': 'menu.clusterManagement',
+  '集群事件': 'menu.clusterEvents',
+  '自定义资源': 'menu.crd',
   '节点': 'menu.node',
   '命名空间': 'menu.namespace',
   '工作负载': 'menu.workloads',
+  'Pod': 'menu.pod',
   'pod': 'menu.pod',
+  'Deployment': 'menu.deployment',
   'deployment': 'menu.deployment',
   '存储': 'menu.storage',
+  'PV': 'menu.pv',
   'pv': 'menu.pv',
+  'PVC': 'menu.pvc',
   'pvc': 'menu.pvc',
   '网络': 'menu.network',
+  'Service': 'menu.service',
   'service': 'menu.service',
+  'Ingress': 'menu.ingress',
   'ingress': 'menu.ingress',
   '配置管理': 'menu.config',
+  'ConfigMap': 'menu.configmap',
   'configmap': 'menu.configmap',
+  'Secret': 'menu.secret',
   'secret': 'menu.secret',
   '项目管理': 'menu.project',
   '中文文档': 'menu.chineseDocs',
   '我的博客': 'menu.myBlog',
   '技术栈': 'menu.techStack',
+  '权限演示': 'menu.permission',
   '权限': 'menu.permission',
+  '页面级权限': 'menu.pageLevel',
   '页面级': 'menu.pageLevel',
-  '按钮级': 'menu.buttonLevel'
+  '按钮级权限': 'menu.buttonLevel',
+  '按钮级': 'menu.buttonLevel',
+  '系统管理': 'menu.admin',
+  '用户管理': 'menu.userManagement',
+  '角色管理': 'menu.roleManagement',
+  '系统设置': 'menu.systemSettings'
 }
 
 // 获取国际化标题
@@ -205,16 +222,9 @@ onMounted(() => {
 <template>
   <div class="tags-view-container">
     <ScrollPane class="tags-view-wrapper" :tag-refs="tagRefs">
-      <router-link
-        ref="tagRefs"
-        v-for="tag in tagsViewStore.visitedViews"
-        :key="tag.path"
-        :class="{ active: isActive(tag) }"
-        class="tags-view-item"
-        :to="{ path: tag.path, query: tag.query }"
-        @click.middle="!isAffix(tag) && closeSelectedTag(tag)"
-        @contextmenu.prevent="openMenu(tag, $event)"
-      >
+      <router-link ref="tagRefs" v-for="tag in tagsViewStore.visitedViews" :key="tag.path"
+        :class="{ active: isActive(tag) }" class="tags-view-item" :to="{ path: tag.path, query: tag.query }"
+        @click.middle="!isAffix(tag) && closeSelectedTag(tag)" @contextmenu.prevent="openMenu(tag, $event)">
         {{ getI18nTitle(tag.meta?.title || '') }}
         <el-icon v-if="!isAffix(tag)" :size="12" @click.prevent.stop="closeSelectedTag(tag)">
           <Close />
@@ -232,10 +242,11 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .tags-view-container {
-  height: var(--v3-tagsview-height);
+  height: var(--ck-tagsview-height);
   width: 100%;
-  color: var(--v3-tagsview-text-color);
+  color: var(--ck-tagsview-text-color);
   overflow: hidden;
+
   .tags-view-wrapper {
     .tags-view-item {
       display: inline-block;
@@ -243,35 +254,41 @@ onMounted(() => {
       cursor: pointer;
       height: 26px;
       line-height: 26px;
-      border: 1px solid var(--v3-tagsview-tag-border-color);
-      border-radius: var(--v3-tagsview-tag-border-radius);
-      background-color: var(--v3-tagsview-tag-bg-color);
+      border: 1px solid var(--ck-tagsview-tag-border-color);
+      border-radius: var(--ck-tagsview-tag-border-radius);
+      background-color: var(--ck-tagsview-tag-bg-color);
       padding: 0 8px;
       font-size: 12px;
       margin-left: 5px;
       margin-top: 4px;
+
       &:first-of-type {
         margin-left: 5px;
       }
+
       &:last-of-type {
         margin-right: 5px;
       }
+
       &.active {
-        background-color: var(--v3-tagsview-tag-active-bg-color);
-        color: var(--v3-tagsview-tag-active-text-color);
-        border-color: var(--v3-tagsview-tag-active-border-color);
+        background-color: var(--ck-tagsview-tag-active-bg-color);
+        color: var(--ck-tagsview-tag-active-text-color);
+        border-color: var(--ck-tagsview-tag-active-border-color);
       }
+
       .el-icon {
         margin: 0 2px;
         vertical-align: middle;
         border-radius: 50%;
+
         &:hover {
-          background-color: var(--v3-tagsview-tag-icon-hover-bg-color);
-          color: var(--v3-tagsview-tag-icon-hover-color);
+          background-color: var(--ck-tagsview-tag-icon-hover-bg-color);
+          color: var(--ck-tagsview-tag-icon-hover-color);
         }
       }
     }
   }
+
   .contextmenu {
     margin: 0;
     z-index: 3000;
@@ -280,16 +297,18 @@ onMounted(() => {
     padding: 5px 0;
     border-radius: 4px;
     font-size: 12px;
-    color: var(--v3-tagsview-contextmenu-text-color);
-    background-color: var(--v3-tagsview-contextmenu-bg-color);
-    box-shadow: var(--v3-tagsview-contextmenu-box-shadow);
+    color: var(--ck-tagsview-contextmenu-text-color);
+    background-color: var(--ck-tagsview-contextmenu-bg-color);
+    box-shadow: var(--ck-tagsview-contextmenu-box-shadow);
+
     li {
       margin: 0;
       padding: 7px 16px;
       cursor: pointer;
+
       &:hover {
-        color: var(--v3-tagsview-contextmenu-hover-text-color);
-        background-color: var(--v3-tagsview-contextmenu-hover-bg-color);
+        color: var(--ck-tagsview-contextmenu-hover-text-color);
+        background-color: var(--ck-tagsview-contextmenu-hover-bg-color);
       }
     }
   }
