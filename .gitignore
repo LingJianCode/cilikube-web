@@ -6,8 +6,16 @@ dist
 dist-ssr
 .eslintcache
 
-# Local env files
+# Local env files（真实环境配置勿提交；用 *.example 作为模板）
 *.local
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editor / backup junk
+*.backup
+*.bak
 
 # Logs
 logs
